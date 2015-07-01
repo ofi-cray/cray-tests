@@ -140,7 +140,7 @@ static int alloc_ep_res(void)
 
 	memset(&av_attr, 0, sizeof(av_attr));
 	av_attr.type = fi->domain_attr->av_type ?
-			fi->domain_attr->av_type : FI_AV_TABLE;
+			fi->domain_attr->av_type : FI_AV_MAP;
 	av_attr.count = 2;
 	av_attr.name = NULL;
 
