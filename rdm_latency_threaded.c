@@ -436,8 +436,13 @@ int init_per_thread_data(struct per_thread_data *ptd)
 
 int fini_per_thread_data(struct per_thread_data *ptd)
 {
-	fi_close(&ptd->l_mr->fid);
-	fi_close(&ptd->r_mr->fid);
+	assert(ptd != NULL);
+
+	if (ptd->l_mr != NULL)
+		fi_close(&ptd->l_mr->fid);
+
+	if (ptd->r_mr != NULL)
+		fi_close(&ptd->r_mr->fid);
 
 	free_ep_res(ptd);
 
