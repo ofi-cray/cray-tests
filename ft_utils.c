@@ -97,7 +97,7 @@ static void gni_pmi_send(char *kvs, void *buffer, size_t len)
 {
 	char *data;
 	char key[64];
-	int rc;
+	int __attribute__((unused)) rc;
 
 	data = encode(buffer, len);
 
@@ -122,7 +122,7 @@ static void gni_pmi_receive(char *kvs, int rank, void *buffer, size_t len)
 	char *data;
 	char key[64];
 	char *keyval = calloc(ENCODE_LEN(len), 1);
-	int rc;
+	int __attribute__((unused)) rc;
 	size_t outlen;
 
 	snprintf(key, 64, "%s_rank%d", kvs, rank);
@@ -189,7 +189,7 @@ static void pmi_coll_init(void)
 {
 	int len;
 	int rank;
-	int rc;
+	int __attribute__((unused)) rc;
 
 	rc = PMI_Get_rank(&rank);
 	assert(rc == PMI_SUCCESS);
@@ -212,7 +212,7 @@ static void pmi_coll_init(void)
 static void allgather(void *in, void *out, int len)
 {
 	static int *ivec_ptr, already_called, job_size;
-	int i, rc;
+	int i, __attribute__((unused)) rc;
 	int my_rank;
 	char *tmp_buf, *out_ptr;
 
@@ -258,7 +258,7 @@ void FT_Abort(void)
 
 void FT_Barrier(void)
 {
-	int rc;
+	int __attribute__((unused)) rc;
 
 	rc = PMI_Barrier();
 	assert(rc == PMI_SUCCESS);
@@ -266,7 +266,8 @@ void FT_Barrier(void)
 
 void FT_Init(int *argc, char ***argv)
 {
-	int rc, first_spawned;
+	int __attribute__((unused)) rc;
+	int first_spawned;
 	void *libpmi_handle;
 
 	libpmi_handle = dlopen("libpmi.so.0", RTLD_LAZY | RTLD_GLOBAL);
@@ -283,7 +284,7 @@ void FT_Init(int *argc, char ***argv)
 
 void FT_Rank(int *rank)
 {
-	int rc;
+	int __attribute__((unused)) rc;
 
 	rc = PMI_Get_rank(rank);
 	assert(rc == PMI_SUCCESS);
@@ -296,7 +297,7 @@ void FT_Finalize(void)
 
 void FT_Job_size(int *nranks)
 {
-	int rc;
+	int __attribute__((unused)) rc;
 
 	rc = PMI_Get_size(nranks);
 	assert(rc == PMI_SUCCESS);
@@ -309,7 +310,7 @@ void FT_Allgather(void *src, size_t len_per_rank, void *targ)
 
 void FT_Bcast(void *buffer, size_t len)
 {
-	int rc;
+	int __attribute__((unused)) rc;
 
 	rc = PMI_Bcast(buffer, len);
 	assert(rc == PMI_SUCCESS);
