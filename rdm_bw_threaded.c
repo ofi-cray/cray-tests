@@ -124,98 +124,8 @@ struct test_tunables {
 	int threads;
 };
 
-enum {
-	ENV_TYPE_INT = 1,
-	ENV_TYPE_BOOL,
-	ENV_TYPE_STR,
-};
-
-enum {
-	RDM_BW_THREADS = 0,
-	RDM_MAX_ENV_CNT
-};
-
-struct environ_var {
-	const char* name;
-	int type;
-	union _defaults {
-		void *addr;
-		int int_val;
-		int bool_val;
-		char *str_val;
-	} def; /* defaults */
-	union _tunables{
-		void **addr;
-		int *int_val;
-		int *bool_val;
-		char **str_val;
-	} out;
-};
-
-struct test_tunables tunables;
-struct environ_var env_vars[RDM_MAX_ENV_CNT] = {
-		{ .name = "RDM_BW_THREADS",
-		  .type = ENV_TYPE_INT,
-		  .def.int_val = 1,
-		  .out.addr = (void *) &tunables.threads,
-		},
-};
-
-pthread_mutex_t mutex;
-
-static void get_environment_variables(void)
-{
-	struct environ_var *var;
-	char *value = NULL, *tmp, *end;
-	int i;
-
-	for (i = 0; i < RDM_MAX_ENV_CNT; i++)
-	{
-		var = &env_vars[i];
-		if (!var->def.addr)
-			continue;
-
-		switch (var->type) {
-		case ENV_TYPE_INT:
-			*var->out.int_val = var->def.int_val;
-			break;
-		case ENV_TYPE_BOOL:
-			*var->out.bool_val = (var->def.bool_val != 0);
-			break;
-		case ENV_TYPE_STR:
-			strcpy(*var->out.str_val, var->def.str_val);
-			break;
-		}
-
-		value = getenv(var->name);
-		if (!value)
-			continue;
-
-		tmp = strdup(value);
-		if (!tmp)
-			continue;
-
-		switch (var->type) {
-		case ENV_TYPE_INT:
-			*var->out.int_val = strtol(tmp, &end, 10);
-			if (errno == EINVAL || errno == ERANGE)
-				*var->out.int_val = var->def.int_val;
-			break;
-		case ENV_TYPE_BOOL:
-			*var->out.bool_val = strtol(tmp, &end, 10);
-			if (errno == EINVAL || errno == ERANGE)
-				*var->out.bool_val = var->def.bool_val;
-
-			*var->out.bool_val = (*var->out.bool_val != 0);
-			break;
-		case ENV_TYPE_STR:
-			strcpy(*var->out.str_val, tmp);
-			break;
-		}
-
-		free(tmp);
-	}
-}
+static struct test_tunables tunables;
+static pthread_mutex_t mutex;
 
 void print_usage(void)
 {
@@ -465,8 +375,13 @@ int init_per_thread_data(struct per_thread_data *ptd)
 
 int fini_per_thread_data(struct per_thread_data * ptd)
 {
-	fi_close(&ptd->l_mr->fid);
-	fi_close(&ptd->r_mr->fid);
+	assert(ptd != NULL);
+
+	if (&ptd->l_mr->fid != NULL)
+		fi_close(&ptd->l_mr->fid);
+
+	if (&ptd->r_mr->fid != NULL)
+		fi_close(&ptd->r_mr->fid);
 
 	free_ep_res(ptd);
 
@@ -475,11 +390,11 @@ int fini_per_thread_data(struct per_thread_data * ptd)
 	return 0;
 }
 
-int thread_fn(void *data)
+void *thread_fn(void *data)
 {
 	int i, j, peer;
 	int size;
-	ssize_t fi_rc;
+	ssize_t __attribute__((unused)) fi_rc;
 	struct per_thread_data *ptd;
 	struct per_iteration_data it;
 	uint64_t t_start = 0, t_end = 0, t = 0;
@@ -489,7 +404,7 @@ int thread_fn(void *data)
 	size = it.message_size;
 
 	if (it.thread_id >= tunables.threads)
-		return -EINVAL;
+		return (void *)-EINVAL;
 
 	ptd = &thread_data[it.thread_id];
 
@@ -507,10 +422,7 @@ int thread_fn(void *data)
 						ptd->rbuf_descs[peer].addr,
 						ptd->rbuf_descs[peer].key,
 						(void *)(intptr_t)j);
-				if (fi_rc) {
-					FT_PRINTERR("fi_write", fi_rc);
-					return fi_rc;
-				}
+				assert(fi_rc==FI_SUCCESS);
 			}
 
 			wait_for_data_completion(ptd->scq, window_size);
@@ -554,27 +466,19 @@ int thread_fn(void *data)
 	MBps += tmp / (t / 1e6);
 	pthread_mutex_unlock(&mutex);
 
-	return 0;
+	return NULL;
 }
 
 int main(int argc, char *argv[])
 {
 	int op, ret;
-	int i, j, t, size;
+	int i, j, size;
 	struct per_iteration_data iter_key;
 	struct per_thread_data *ptd;
 	double min_lat, max_lat, sum_lat;
 
 	pthread_mutex_init(&mutex, NULL);
-
-	get_environment_variables();
-	printf("%i thread_data\n", tunables.threads);
-
-	thread_data = calloc(tunables.threads, sizeof(struct per_thread_data));
-	if (!thread_data) {
-		fprintf(stderr, "Could not allocate memory for per thread struct\n");
-		return -1;
-	}
+	tunables.threads = 1;
 
 	FT_Init(&argc, &argv);
 	FT_Rank(&myid);
@@ -584,10 +488,17 @@ int main(int argc, char *argv[])
 	if (!hints)
 		return -1;
 
-	while ((op = getopt(argc, argv, "h" INFO_OPTS)) != -1) {
+	while ((op = getopt(argc, argv, "ht:" INFO_OPTS)) != -1) {
 		switch (op) {
 		default:
 			ft_parseinfo(op, optarg, hints);
+			break;
+		case 't':
+			tunables.threads = atoi(optarg);
+			if (tunables.threads <= 0) {
+				print_usage();
+				return EXIT_FAILURE;
+			}
 			break;
 		case '?':
 		case 'h':
@@ -614,6 +525,14 @@ int main(int argc, char *argv[])
 	if (ret) {
 		fprintf(stderr, "Problem in fabric initialization\n");
 		return ret;
+	}
+
+	if (myid == 0)
+		printf("%i threads\n", tunables.threads);
+	thread_data = calloc(tunables.threads, sizeof(struct per_thread_data));
+	if (!thread_data) {
+		fprintf(stderr, "Could not allocate memory for per thread struct\n");
+		return -1;
 	}
 
 	for (i = 0; i < tunables.threads; i++) {
