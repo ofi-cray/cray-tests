@@ -303,7 +303,7 @@ double calc_bw(int rank, int size, int num_pairs, int window_size, char *s_buf,
 	int loop, skip;
 	int mult = (DEFAULT_WINDOW / window_size) > 0 ? (DEFAULT_WINDOW /
 			window_size) : 1;
-	int fi_rc;
+	int __attribute__((unused)) fi_rc;
 
 	for (i = 0; i < size; i++) {
 		s_buf[i] = 'a';

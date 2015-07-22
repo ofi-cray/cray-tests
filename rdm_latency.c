@@ -284,7 +284,7 @@ int main(int argc, char *argv[])
 	char *s_buf, *r_buf;
 	uint64_t t_start = 0, t_end = 0;
 	int op, ret;
-	ssize_t fi_rc;
+	ssize_t __attribute__((unused)) fi_rc;
 
 	FT_Init(&argc, &argv);
 	FT_Rank(&myid);
