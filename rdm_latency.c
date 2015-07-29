@@ -51,7 +51,11 @@
 #include "shared.h"
 
 #define MAX_ALIGNMENT 65536
-#define MAX_MSG_SIZE (1<<22)
+/*
+ * restrict message size to less than the SMSG mailbox threshold
+ * for now, which is 16384 - sizeof-of-gni-prov internal header
+ */
+#define MAX_MSG_SIZE (1<<13)
 #define MYBUFSIZE (MAX_MSG_SIZE + MAX_ALIGNMENT)
 
 #define TEST_DESC "Libfabric Latency Test"
