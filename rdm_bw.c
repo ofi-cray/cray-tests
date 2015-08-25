@@ -53,7 +53,7 @@
 #define MAX_MSG_SIZE (1<<22)
 #define MYBUFSIZE (MAX_MSG_SIZE + MAX_ALIGNMENT)
 
-#define TEST_DESC "Libfabric Bandwidth Test"
+#define TEST_DESC "Libfabric Bandwidth/Latency Test"
 #define HEADER "# " TEST_DESC " \n"
 #ifndef FIELD_WIDTH
 #   define FIELD_WIDTH 20
@@ -62,9 +62,9 @@
 #   define FLOAT_PRECISION 2
 #endif
 
-int loop = 100;
-int window_size = 64;
-int skip = 10;
+int loop = 100000;
+int window_size = 1;
+int skip = 1000;
 
 int loop_large = 20;
 int window_size_large = 64;
@@ -374,8 +374,8 @@ int main(int argc, char *argv[])
 
 	if (myid == 0) {
 		fprintf(stdout, HEADER);
-		fprintf(stdout, "%-*s%*s\n", 10, "# Size", FIELD_WIDTH,
-				"Bandwidth (MB/s)");
+		fprintf(stdout, "%-*s%*s%*s\n", 10, "# Size", FIELD_WIDTH,
+				"Bandwidth (MB/s)", FIELD_WIDTH, "latency");
 		fflush(stdout);
 	}
 
@@ -418,41 +418,22 @@ int main(int argc, char *argv[])
 				wait_for_data_completion(scq, window_size);
 			}
 
-			fi_rc = fi_send(ep, s_buf, 4, NULL,
-					fi_addrs[peer],
-					NULL);
-			assert(!fi_rc);
-			wait_for_data_completion(scq, 1);
-
-			fi_rc = fi_recv(ep, s_buf, 4, NULL,
-					fi_addrs[peer],
-					NULL);
-			assert(!fi_rc);
-			wait_for_data_completion(rcq, 1);
-
 			t_end = get_time_usec();
 			t = t_end - t_start;
 		} else if (myid == 1) {
 			peer = 0;
 
-			fi_rc = fi_recv(ep, s_buf, 4, NULL,
-					fi_addrs[peer],
-					NULL);
-			assert(!fi_rc);
-			wait_for_data_completion(rcq, 1);
-
-			fi_rc = fi_send(ep, s_buf, 4, NULL,
-					fi_addrs[peer],
-					NULL);
-			assert(!fi_rc);
-			wait_for_data_completion(scq, 1);
 		}
 
 		if (myid == 0) {
+			double latency = (t_end - t_start) /
+					(double)(loop * window_size);
 			double tmp = size / 1e6 * loop * window_size;
 
-			fprintf(stdout, "%-*d%*.*f\n", 10, size, FIELD_WIDTH,
-					FLOAT_PRECISION, tmp / (t / 1e6));
+			fprintf(stdout, "%-*d%*.*f%*.*f\n", 10, size,
+				FIELD_WIDTH, FLOAT_PRECISION,
+				tmp / (t / 1e6), FIELD_WIDTH,
+				FLOAT_PRECISION, latency);
 			fflush(stdout);
 		}
 	}
