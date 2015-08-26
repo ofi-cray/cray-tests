@@ -47,6 +47,7 @@
 #include <rdma/fi_endpoint.h>
 #include <rdma/fi_cm.h>
 #include <rdma/fi_rma.h>
+#include <rdma/fi_tagged.h>
 
 #include "ft_utils.h"
 #include "shared.h"
@@ -391,13 +392,13 @@ void *thread_fn(void *data)
 			if (i == skip)
 				t_start = get_time_usec();
 
-			fi_rc = fi_send(ptd->ep, ptd->s_buf, size, NULL,
-					ptd->fi_addrs[peer], NULL);
+			fi_rc = fi_tsend(ptd->ep, ptd->s_buf, size, NULL,
+					ptd->fi_addrs[peer], 0xDEADBEEF, NULL);
 			assert(!fi_rc);
 			wait_for_data_completion(ptd->scq, 1);
 
-			fi_rc = fi_recv(ptd->ep, ptd->r_buf, size, NULL,
-					ptd->fi_addrs[peer], NULL);
+			fi_rc = fi_trecv(ptd->ep, ptd->r_buf, size, NULL,
+					ptd->fi_addrs[peer], 0xDEADBEEF, 0, NULL);
 			assert(!fi_rc);
 			wait_for_data_completion(ptd->rcq, 1);
 		}
@@ -406,13 +407,13 @@ void *thread_fn(void *data)
 	} else if (myid == 1) {
 		peer = 0;
 		for (i = 0; i < loop + skip; i++) {
-			fi_rc = fi_recv(ptd->ep, ptd->r_buf, size, NULL,
-					ptd->fi_addrs[peer], NULL);
+			fi_rc = fi_trecv(ptd->ep, ptd->r_buf, size, NULL,
+					ptd->fi_addrs[peer], 0xDEADBEEF, 0, NULL);
 			assert(!fi_rc);
 			wait_for_data_completion(ptd->rcq, 1);
 
-			fi_rc = fi_send(ptd->ep, ptd->s_buf, size, NULL,
-					ptd->fi_addrs[peer], NULL);
+			fi_rc = fi_tsend(ptd->ep, ptd->s_buf, size, NULL,
+					ptd->fi_addrs[peer], 0xDEADBEEF, NULL);
 			assert(!fi_rc);
 			wait_for_data_completion(ptd->scq, 1);
 		}
