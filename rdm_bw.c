@@ -415,7 +415,7 @@ int main(int argc, char *argv[])
 					}
 				}
 
-				wait_for_data_completion(scq, window_size);
+				ft_wait_for_comp(scq, window_size);
 			}
 
 			t_end = get_time_usec();

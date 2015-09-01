@@ -374,12 +374,12 @@ int main(int argc, char *argv[])
 				fi_rc = fi_tsend(ep, s_buf, size, NULL,
 						fi_addrs[peer], 0xDEADBEEF, NULL);
 				assert(!fi_rc);
-				wait_for_data_completion(scq, 1);
+				ft_wait_for_comp(scq, 1);
 
 				fi_rc = fi_trecv(ep, r_buf, size, NULL,
 						fi_addrs[peer], 0xDEADBEEF, 0, NULL);
 				assert(!fi_rc);
-				wait_for_data_completion(rcq, 1);
+				ft_wait_for_comp(rcq, 1);
 			}
 
 			t_end = get_time_usec();
@@ -389,12 +389,12 @@ int main(int argc, char *argv[])
 				fi_rc = fi_trecv(ep, r_buf, size, NULL,
 						fi_addrs[peer], 0xDEADBEEF, 0, NULL);
 				assert(!fi_rc);
-				wait_for_data_completion(rcq, 1);
+				ft_wait_for_comp(rcq, 1);
 
 				fi_rc = fi_tsend(ep, s_buf, size, NULL,
 						fi_addrs[peer], 0xDEADBEEF, NULL);
 				assert(!fi_rc);
-				wait_for_data_completion(scq, 1);
+				ft_wait_for_comp(scq, 1);
 			}
 		}
 

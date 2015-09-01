@@ -395,12 +395,12 @@ void *thread_fn(void *data)
 			fi_rc = fi_tsend(ptd->ep, ptd->s_buf, size, NULL,
 					ptd->fi_addrs[peer], 0xDEADBEEF, NULL);
 			assert(!fi_rc);
-			wait_for_data_completion(ptd->scq, 1);
+			ft_wait_for_comp(ptd->scq, 1);
 
 			fi_rc = fi_trecv(ptd->ep, ptd->r_buf, size, NULL,
 					ptd->fi_addrs[peer], 0xDEADBEEF, 0, NULL);
 			assert(!fi_rc);
-			wait_for_data_completion(ptd->rcq, 1);
+			ft_wait_for_comp(ptd->rcq, 1);
 		}
 
 		t_end = get_time_usec();
@@ -410,12 +410,12 @@ void *thread_fn(void *data)
 			fi_rc = fi_trecv(ptd->ep, ptd->r_buf, size, NULL,
 					ptd->fi_addrs[peer], 0xDEADBEEF, 0, NULL);
 			assert(!fi_rc);
-			wait_for_data_completion(ptd->rcq, 1);
+			ft_wait_for_comp(ptd->rcq, 1);
 
 			fi_rc = fi_tsend(ptd->ep, ptd->s_buf, size, NULL,
 					ptd->fi_addrs[peer], 0xDEADBEEF, NULL);
 			assert(!fi_rc);
-			wait_for_data_completion(ptd->scq, 1);
+			ft_wait_for_comp(ptd->scq, 1);
 		}
 	}
 

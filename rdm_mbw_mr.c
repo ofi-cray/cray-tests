@@ -336,11 +336,11 @@ double calc_bw(int rank, int size, int num_pairs, int window_size, char *s_buf,
 				assert(!fi_rc);
 			}
 
-			wait_for_data_completion(scq, window_size);
+			ft_wait_for_comp(scq, window_size);
 			fi_rc = fi_recv(ep, r_buf, 4, NULL,
 					fi_addrs[target], NULL);
 			assert(!fi_rc);
-			wait_for_data_completion(rcq, 1);
+			ft_wait_for_comp(rcq, 1);
 		}
 
 		t_end = get_time_usec();
@@ -359,11 +359,11 @@ double calc_bw(int rank, int size, int num_pairs, int window_size, char *s_buf,
 				assert(!fi_rc);
 			}
 
-			wait_for_data_completion(rcq, window_size);
+			ft_wait_for_comp(rcq, window_size);
 			fi_rc = fi_send(ep, s_buf, 4, NULL,
 					fi_addrs[target], NULL);
 			assert(!fi_rc);
-			wait_for_data_completion(scq, 1);
+			ft_wait_for_comp(scq, 1);
 		}
 	} else {
 		FT_Barrier();
