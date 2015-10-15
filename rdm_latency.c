@@ -2,6 +2,7 @@
  * Copyright (C) 2002-2012 the Network-Based Computing Laboratory
  * Copyright (c) 2013-2014 Intel Corporation.  All rights reserved.
  * Copyright (c) 2015 Cray Inc.  All rights reserved.
+ * Copyright (c) 2015 Los Alamos National Security, LLC. All rights reserved.
  *
  * This software is available to you under a choice of one of two
  * licenses.  You may choose to be licensed under the terms of the GNU
@@ -106,6 +107,49 @@ static void free_ep_res(void)
 	fi_close(&av->fid);
 	fi_close(&rcq->fid);
 	fi_close(&scq->fid);
+}
+
+static void cq_readerr(struct fid_cq *cq, const char *cq_str)
+{
+	struct fi_cq_err_entry cq_err;
+	const char *err_str;
+	int ret;
+
+	ret = fi_cq_readerr(cq, &cq_err, 0);
+	if (ret < 0) {
+		FT_PRINTERR("fi_cq_readerr", ret);
+	} else {
+		err_str = fi_cq_strerror(cq, cq_err.prov_errno, cq_err.err_data,
+					NULL, 0);
+		fprintf(stderr, "%s: %d %s\n", cq_str, cq_err.err,
+			fi_strerror(cq_err.err));
+		fprintf(stderr, "%s: prov_err: %s (%d)\n", cq_str, err_str,
+			cq_err.prov_errno);
+	}
+}
+
+/*
+ * fi_cq_err_entry can be cast to any CQ entry format.
+ */
+static int ft_wait_for_comp_omb(struct fid_cq *cq, int num_completions)
+{
+	struct fi_cq_err_entry comp;
+	int ret;
+
+	while (num_completions > 0) {
+		ret = fi_cq_read(cq, &comp, 1);
+		if (ret > 0) {
+			num_completions--;
+		} else if (ret < 0 && ret != -FI_EAGAIN) {
+			if (ret == -FI_EAVAIL) {
+				cq_readerr(cq, "cq");
+			} else {
+				FT_PRINTERR("fi_cq_read", ret);
+			}
+			return ret;
+		}
+	}
+	return 0;
 }
 
 static int alloc_ep_res(void)
@@ -374,12 +418,12 @@ int main(int argc, char *argv[])
 				fi_rc = fi_tsend(ep, s_buf, size, NULL,
 						fi_addrs[peer], 0xDEADBEEF, NULL);
 				assert(!fi_rc);
-				ft_wait_for_comp(scq, 1);
+				ft_wait_for_comp_omb(scq, 1);
 
 				fi_rc = fi_trecv(ep, r_buf, size, NULL,
 						fi_addrs[peer], 0xDEADBEEF, 0, NULL);
 				assert(!fi_rc);
-				ft_wait_for_comp(rcq, 1);
+				ft_wait_for_comp_omb(rcq, 1);
 			}
 
 			t_end = get_time_usec();
@@ -389,12 +433,12 @@ int main(int argc, char *argv[])
 				fi_rc = fi_trecv(ep, r_buf, size, NULL,
 						fi_addrs[peer], 0xDEADBEEF, 0, NULL);
 				assert(!fi_rc);
-				ft_wait_for_comp(rcq, 1);
+				ft_wait_for_comp_omb(rcq, 1);
 
 				fi_rc = fi_tsend(ep, s_buf, size, NULL,
 						fi_addrs[peer], 0xDEADBEEF, NULL);
 				assert(!fi_rc);
-				ft_wait_for_comp(scq, 1);
+				ft_wait_for_comp_omb(scq, 1);
 			}
 		}
 
