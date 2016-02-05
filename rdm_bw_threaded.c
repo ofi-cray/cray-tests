@@ -77,8 +77,6 @@ int large_message_size = 8192;
 
 static int rx_depth = 512;
 
-double MBps = 0.0;
-
 typedef struct buf_desc {
 	uint64_t addr;
 	uint64_t key;
@@ -102,6 +100,9 @@ struct per_thread_data {
 	fi_addr_t *fi_addrs;
 	buf_desc_t *rbuf_descs;
 	double latency;
+	uint64_t bytes_sent;
+	uint64_t time_start;
+	uint64_t time_end;
 };
 
 struct per_iteration_data {
@@ -114,6 +115,7 @@ struct per_iteration_data {
 	};
 };
 
+static pthread_barrier_t thread_barrier;
 struct per_thread_data *thread_data;
 struct fi_info *fi, *hints;
 struct fid_fabric *fab;
@@ -441,8 +443,7 @@ void *thread_fn(void *data)
 	ssize_t __attribute__((unused)) fi_rc;
 	struct per_thread_data *ptd;
 	struct per_iteration_data it;
-	uint64_t t_start = 0, t_end = 0, t = 0;
-	double tmp;
+	uint64_t t_start = 0, t_end = 0;
 
 	it.data = data;
 	size = it.message_size;
@@ -451,6 +452,9 @@ void *thread_fn(void *data)
 		return (void *)-EINVAL;
 
 	ptd = &thread_data[it.thread_id];
+	ptd->bytes_sent = 0;
+
+	pthread_barrier_wait(&thread_barrier);
 
 	if (myid == 0) {
 		peer = 1;
@@ -467,6 +471,7 @@ void *thread_fn(void *data)
 						ptd->rbuf_descs[peer].key,
 						(void *)(intptr_t)j);
 				assert(fi_rc==FI_SUCCESS);
+				ptd->bytes_sent += size;
 			}
 
 			ft_wait_for_comp_omb(ptd->scq, window_size);
@@ -485,7 +490,6 @@ void *thread_fn(void *data)
 		ft_wait_for_comp_omb(ptd->rcq, 1);
 
 		t_end = get_time_usec();
-		t = t_end - t_start;
 	} else if (myid == 1) {
 		peer = 0;
 
@@ -502,13 +506,11 @@ void *thread_fn(void *data)
 		ft_wait_for_comp_omb(ptd->scq, 1);
 	}
 
+	pthread_barrier_wait(&thread_barrier);
+
 	ptd->latency = (t_end - t_start) / (double)(loop * window_size);
-
-	tmp = size / 1e6 * loop * window_size;
-
-	pthread_mutex_lock(&mutex);
-	MBps += tmp / (t / 1e6);
-	pthread_mutex_unlock(&mutex);
+	ptd->time_start = t_start;
+	ptd->time_end = t_end;
 
 	return NULL;
 }
@@ -520,6 +522,9 @@ int main(int argc, char *argv[])
 	struct per_iteration_data iter_key;
 	struct per_thread_data *ptd;
 	double min_lat, max_lat, sum_lat;
+	uint64_t time_start, time_end;
+	uint64_t bytes_sent;
+	double mbps;
 
 	pthread_mutex_init(&mutex, NULL);
 	tunables.threads = 1;
@@ -550,6 +555,8 @@ int main(int argc, char *argv[])
 			return EXIT_FAILURE;
 		}
 	}
+
+	pthread_barrier_init(&thread_barrier, NULL, tunables.threads);
 
 	hints->ep_attr->type	= FI_EP_RDM;
 	hints->caps		= FI_MSG | FI_DIRECTED_RECV | FI_RMA;
@@ -634,6 +641,10 @@ int main(int argc, char *argv[])
 
 		if (myid == 0) {
 			min_lat = max_lat = sum_lat = thread_data[0].latency;
+			bytes_sent = thread_data[0].bytes_sent;
+			time_start = thread_data[0].time_start;
+			time_end = thread_data[0].time_end;
+
 			for (i = 1; i < tunables.threads; i++) {
 				if (thread_data[i].latency < min_lat) {
 					min_lat = thread_data[i].latency;
@@ -641,17 +652,24 @@ int main(int argc, char *argv[])
 					max_lat = thread_data[i].latency;
 				}
 				sum_lat += thread_data[i].latency;
+
+				bytes_sent += thread_data[i].bytes_sent;
+
+				if (thread_data[i].time_start < time_start)
+					time_start = thread_data[i].time_start;
+
+				if (thread_data[i].time_end > time_end)
+					time_end = thread_data[i].time_end;
 			}
+			mbps = ((bytes_sent * 1.0) / (1024. * 1024.)) / ((time_end - time_start) / (1.0 * 1e6));
 
 			fprintf(stdout, "%-*d%*.*f%*.*f%*.*f%*.*f\n", 10, size,
-				FIELD_WIDTH, FLOAT_PRECISION, MBps,
+				FIELD_WIDTH, FLOAT_PRECISION, mbps,
 				FIELD_WIDTH, FLOAT_PRECISION,
 				sum_lat / tunables.threads,
 				FIELD_WIDTH, FLOAT_PRECISION, min_lat,
 				FIELD_WIDTH, FLOAT_PRECISION, max_lat);
 			fflush(stdout);
-
-			MBps = 0.0;
 		}
 
 	}
