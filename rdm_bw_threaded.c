@@ -460,8 +460,9 @@ void *thread_fn(void *data)
 		peer = 1;
 
 		for (i = 0; i < loop + skip; i++) {
-			if (i == skip) {
+			if (i == skip) {  /* warm up loop */
 				t_start = get_time_usec();
+				ptd->bytes_sent = 0;
 			}
 
 			for (j = 0; j < window_size; j++) {
