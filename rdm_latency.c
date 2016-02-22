@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2002-2012 the Network-Based Computing Laboratory
  * Copyright (c) 2013-2014 Intel Corporation.  All rights reserved.
- * Copyright (c) 2015 Cray Inc.  All rights reserved.
+ * Copyright (c) 2015-2016 Cray Inc.  All rights reserved.
  * Copyright (c) 2015 Los Alamos National Security, LLC. All rights reserved.
  *
  * This software is available to you under a choice of one of two
@@ -356,7 +356,7 @@ int main(int argc, char *argv[])
 	}
 
 	hints->ep_attr->type	= FI_EP_RDM;
-	hints->caps		= FI_MSG | FI_DIRECTED_RECV;
+	hints->caps		= FI_TAGGED | FI_DIRECTED_RECV;
 	hints->mode		= FI_CONTEXT | FI_LOCAL_MR;
 
 	if (numprocs != 2) {
