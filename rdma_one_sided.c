@@ -132,8 +132,13 @@ static pthread_mutex_t mutex;
 
 void print_usage(void)
 {
-	if (!myid)
+	if (!myid) {
 		ft_basic_usage(TEST_DESC);
+
+		FT_PRINT_OPTS_USAGE("-l <loops>", "number of loops to measure");
+		FT_PRINT_OPTS_USAGE("-s <skip>", "number of loops to skip");
+		FT_PRINT_OPTS_USAGE("-i <iterations>", "iterations per loop");
+	}
 }
 
 static void cq_readerr(struct fid_cq *cq, const char *cq_str)
@@ -538,10 +543,33 @@ int main(int argc, char *argv[])
 	if (!hints)
 		return -1;
 
-	while ((op = getopt(argc, argv, "ht:" INFO_OPTS)) != -1) {
+	while ((op = getopt(argc, argv, "ht:i:l:s:" INFO_OPTS)) != -1) {
 		switch (op) {
 		default:
 			ft_parseinfo(op, optarg, hints);
+			break;
+
+		case 'l':  // loops
+			loop = atoi(optarg);
+			if (loop <= 0) {
+				print_usage();
+				return EXIT_FAILURE;
+			}
+
+			loop_large = loop / 5;
+			if (loop_large == 0)
+				loop_large = 1;
+			break;
+		case 's':  // skips
+			skip = atoi(optarg);
+			if (skip <= 0) {
+				print_usage();
+				return EXIT_FAILURE;
+			}
+
+			skip_large = skip / 5;
+			if (skip_large == 0)
+				skip_large = 1;
 			break;
 		case 't':
 			tunables.threads = atoi(optarg);
@@ -549,6 +577,14 @@ int main(int argc, char *argv[])
 				print_usage();
 				return EXIT_FAILURE;
 			}
+			break;
+		case 'i':  // window size or iterations per loop
+			window_size = atoi(optarg);
+			if (window_size <= 0) {
+				print_usage();
+				return EXIT_FAILURE;
+			}
+			window_size_large = window_size;
 			break;
 		case '?':
 		case 'h':
