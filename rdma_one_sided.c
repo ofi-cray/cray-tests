@@ -120,6 +120,7 @@ struct per_thread_data *thread_data;
 struct fi_info *fi, *hints;
 struct fid_fabric *fab;
 struct fid_domain *dom;
+static int thread_safe = 1;
 
 int myid, numprocs;
 
@@ -290,6 +291,13 @@ static int init_fabric(void)
 	if (ret) {
 		FT_PRINTERR("fi_fabric", ret);
 		goto err1;
+	}
+
+
+	if (!thread_safe) {
+		fi->domain_attr->threading = FI_THREAD_COMPLETION;
+		fi->domain_attr->data_progress = FI_PROGRESS_MANUAL;
+		fi->domain_attr->control_progress = FI_PROGRESS_MANUAL;
 	}
 
 	/* Open domain */
@@ -543,7 +551,7 @@ int main(int argc, char *argv[])
 	if (!hints)
 		return -1;
 
-	while ((op = getopt(argc, argv, "ht:i:l:s:" INFO_OPTS)) != -1) {
+	while ((op = getopt(argc, argv, "hmt:i:l:s:" INFO_OPTS)) != -1) {
 		switch (op) {
 		default:
 			ft_parseinfo(op, optarg, hints);
@@ -559,6 +567,9 @@ int main(int argc, char *argv[])
 			loop_large = loop / 5;
 			if (loop_large == 0)
 				loop_large = 1;
+			break;
+		case 'm':
+			thread_safe = 0;
 			break;
 		case 's':  // skips
 			skip = atoi(optarg);
