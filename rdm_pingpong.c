@@ -74,6 +74,7 @@ int loop_large = 100;
 int large_message_size = 8192;
 
 static int rx_depth = 512;
+static int thread_safe = 1; // default
 
 struct per_thread_data {
 	pthread_t thread;
@@ -123,6 +124,9 @@ void print_usage(void)
 {
 	if (!myid)
 		ft_basic_usage(TEST_DESC);
+
+	FT_PRINT_OPTS_USAGE("-l <loops>", "number of loops to measure");
+	FT_PRINT_OPTS_USAGE("-s <skip>", "number of loops to skip");
 }
 
 static void cq_readerr(struct fid_cq *cq, const char *cq_str)
@@ -274,6 +278,12 @@ static int init_fabric(void)
 	if (ret) {
 		FT_PRINTERR("fi_fabric", ret);
 		goto err1;
+	}
+
+	if (!thread_safe) {
+		fi->domain_attr->threading = FI_THREAD_COMPLETION;
+		fi->domain_attr->data_progress = FI_PROGRESS_MANUAL;
+		fi->domain_attr->control_progress = FI_PROGRESS_MANUAL;
 	}
 
 	/* Open domain */
@@ -494,18 +504,43 @@ int main(int argc, char *argv[])
 	if (!hints)
 		return -1;
 
-	while ((op = getopt(argc, argv, "ht:" INFO_OPTS)) != -1) {
+	while ((op = getopt(argc, argv, "hl:ms:t:" INFO_OPTS)) != -1) {
 		switch (op) {
 		default:
 			ft_parseinfo(op, optarg, hints);
 			break;
-		case 't':
-			tunables.threads = atoi(optarg);
-			if (tunables.threads <= 0) {
-				print_usage();
-				return EXIT_FAILURE;
-			}
-			break;
+                case 'l':  // loops
+                        loop = atoi(optarg);
+                        if (loop <= 0) {
+                                print_usage();
+                                return EXIT_FAILURE;
+                        }
+
+                        loop_large = loop / 100;
+                        if (loop_large == 0)
+                                loop_large = 1;
+                        break;
+                case 'm':
+                        thread_safe = 0;
+                        break;
+                case 's':  // skips
+                        skip = atoi(optarg);
+                        if (skip <= 0) {
+                                print_usage();
+                                return EXIT_FAILURE;
+                        }
+
+                        skip_large = skip / 100;
+                        if (skip_large == 0)
+                                skip_large = 1;
+                        break;
+                case 't':
+                        tunables.threads = atoi(optarg);
+                        if (tunables.threads <= 0) {
+                                print_usage();
+                                return EXIT_FAILURE;
+                        }
+                        break;
 		case '?':
 		case 'h':
 			print_usage();
