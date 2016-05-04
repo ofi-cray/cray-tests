@@ -46,10 +46,12 @@
 #include <rdma/fi_endpoint.h>
 #include <rdma/fi_cm.h>
 #include <rdma/fi_rma.h>
+#include <stdatomic.h>
 
 #include <pthread.h>
 
 #include "ft_utils.h"
+#include "ft_tbarrier.h"
 #include "shared.h"
 
 #define MAX_ALIGNMENT 65536
@@ -65,7 +67,7 @@
 #   define FLOAT_PRECISION 2
 #endif
 
-int loop = 100;
+int loop = 1000;
 int window_size = 64;
 int skip = 10;
 
@@ -76,11 +78,14 @@ int skip_large = 2;
 int large_message_size = 8192;
 
 static int rx_depth = 512;
+atomic_int tbar_counter[2] __attribute__ ((aligned (64)));
+atomic_int tbar_signal[2] __attribute__ ((aligned (64)));
 
 typedef struct buf_desc {
 	uint64_t addr;
 	uint64_t key;
 } buf_desc_t;
+
 
 struct per_thread_data {
 	pthread_t thread;
@@ -103,6 +108,7 @@ struct per_thread_data {
 	uint64_t bytes_sent;
 	uint64_t time_start;
 	uint64_t time_end;
+	fabtests_tbar_t tbar;
 };
 
 struct per_iteration_data {
@@ -114,6 +120,7 @@ struct per_iteration_data {
 		void *data;
 	};
 };
+
 
 static pthread_barrier_t thread_barrier;
 struct per_thread_data *thread_data;
@@ -467,7 +474,7 @@ void *thread_fn(void *data)
 	ptd = &thread_data[it.thread_id];
 	ptd->bytes_sent = 0;
 
-	pthread_barrier_wait(&thread_barrier);
+        tbarrier(&ptd->tbar);
 
 	if (myid == 0) {
 		peer = 1;
@@ -520,7 +527,7 @@ void *thread_fn(void *data)
 		ft_wait_for_comp_omb(ptd->scq, 1);
 	}
 
-	pthread_barrier_wait(&thread_barrier);
+        tbarrier(&ptd->tbar);
 
 	ptd->latency = (t_end - t_start) / (double)(loop * window_size);
 	ptd->time_start = t_start;
@@ -636,6 +643,8 @@ int main(int argc, char *argv[])
 
 	for (i = 0; i < tunables.threads; i++) {
 		init_per_thread_data(&thread_data[i]);
+		tbarrier_init(&thread_data[i].tbar, tunables.threads,
+			      tbar_counter, tbar_signal);
 	}
 
 	if (myid == 0) {
@@ -709,6 +718,7 @@ int main(int argc, char *argv[])
 				if (thread_data[i].time_end > time_end)
 					time_end = thread_data[i].time_end;
 			}
+
 			mbps = ((bytes_sent * 1.0) / (1024. * 1024.)) / ((time_end - time_start) / (1.0 * 1e6));
 
 			fprintf(stdout, "%-*d%*.*f%*.*f%*.*f%*.*f\n", 10, size,
