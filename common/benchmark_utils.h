@@ -59,13 +59,19 @@
 /**
  * The information structure used throughout the procedures in this header.
  *
- * @var fname	   path to the given csv output file.
- * @var hdr	   space separated list of labels.
- * @var hdr_len	   length of the internally allocated header.
- * @var cols	   number of columns calculated from the hdr.
- * @var date_col   the column number of the date column.
- * @var fp	   file pointer to fname.
- * @var hdr_allocd bit to keep track of whether the hdr was allocd internally.
+ * @var fname	     path to the given csv output file.
+ * @var stats	     metadata returned by stat.
+ * @var fp	     file pointer to fname.
+ *
+ * @var hdr	     space separated list of labels.
+ * @var hdr_len	     length of the internally allocated header.
+ * @var cols	     number of columns calculated from the hdr.
+ * @var date_col     the column number of the date column.
+ *
+ * @var hdr_allocd   keeps track of whether the hdr was allocd internally.
+ * @var hdr_printed  keeps track of whether the hdr has been printed to
+ * the console yet.
+ * @var fname_exists whether the file exists or not.
  */
 static struct info_t {
 	char *fname;
@@ -85,7 +91,10 @@ static struct info_t {
 	int fname_exists;
 } info;
 
+/* Prototypes. */
+static inline int init_info(char *hdr, char *path);
 static inline void fini_info();
+static inline void print_data(double data);
 
 /*******************************************************************************
  * Internal helper functions
@@ -115,7 +124,7 @@ static inline void __set_cols()
 }
 
 /**
- * Get the format from an existing csv file specified by info.fname.
+ * Get the hdr from an existing csv file specified by info.fname.
  */
 static inline void __pull_and_set_hdr()
 {
@@ -183,7 +192,7 @@ static inline void __print_table(double data)
 		time(&t);
 		lt = localtime(&t);
 
-		if (lt) {	/* yy:mm:dd hh:mm:ss */
+		if (lt) {
 			fprintf(stdout, info.date_str, lt->tm_year,
 				lt->tm_mon, lt->tm_mday, lt->tm_hour, lt->tm_min,
 				lt->tm_sec);
@@ -208,11 +217,13 @@ static inline void __print_csv(double data)
 {
 	static unsigned int col;
 
+	/* If the csv file is empty, fill in the header. */
 	if (info.stats.st_size == 0) {
 		fprintf(info.fp, "%s\n", info.hdr);
 		info.stats.st_size = strlen(info.hdr);
 	}
 
+	/* Print the date to the appropriate column. */
 	if (~info.date_col && col == info.date_col) {
 		time_t t;
 		struct tm *lt;
@@ -220,7 +231,7 @@ static inline void __print_csv(double data)
 		time(&t);
 		lt = localtime(&t);
 
-		if (lt) {	/* yy:mm:dd hh:mm:ss */
+		if (lt) {
 			fprintf(info.fp, info.date_str, lt->tm_year % 100,
 				lt->tm_mon, lt->tm_mday, lt->tm_hour, lt->tm_min,
 				lt->tm_sec);
@@ -253,7 +264,8 @@ static inline void __print_csv(double data)
 static inline int init_info(char *hdr, char *path)
 {
 	if (!hdr && !path) {
-		fprintf(stdout, "ERROR: you must provide a non-NULL hdr or valid path.\n");
+		fprintf(stdout, "ERROR: you must provide a non-NULL hdr or "
+			"valid path.\n");
 		return -1;
 	}
 
@@ -274,12 +286,11 @@ static inline int init_info(char *hdr, char *path)
 	if (path) {
 		info.fname_exists = ((stat(info.fname, &info.stats)) == 0);
 
-
 		if (!info.fp) {
 			info.fp = fopen(info.fname, "a+");
 		}
 
-		if (info.fname_exists) {
+		if (info.fname_exists && info.stats.st_size != 0) {
 			__pull_and_set_hdr();
 		} else {
 			if (!hdr) {
@@ -292,7 +303,8 @@ static inline int init_info(char *hdr, char *path)
 			fprintf(info.fp, info.hdr);
 		}
 	} else {
-		fprintf(stdout, "ERROR: You must provide a path to an existing csv.\n");
+		fprintf(stdout, "ERROR: You must provide a path to an existing"
+			"csv.\n");
 		fini_info();
 		return -1;
 	}
@@ -321,14 +333,18 @@ static inline void fini_info()
 	info.fname = NULL;
 }
 
+/**
+ * Append the data to the specified output.
+ * @param data, the data to append.
+ */
 static inline void print_data(double data)
 {
 	if (info.fp) {
 		__print_csv(data);
 	} else {
 		if (!info.hdr) {
-			fprintf(stdout, "ERROR: You must successfully call init_info()"
-				" first.\n");
+			fprintf(stdout, "ERROR: You must successfully call "
+				"init_info() first.\n");
 			return;
 		}
 	}
