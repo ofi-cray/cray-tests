@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2002-2012 the Network-Based Computing Laboratory
  * Copyright (c) 2013-2014 Intel Corporation.  All rights reserved.
- * Copyright (c) 2015 Cray Inc.  All rights reserved.
+ * Copyright (c) 2015-2016 Cray Inc.  All rights reserved.
  * Copyright (c) 2015 Los Alamos National Security, LLC. All rights reserved.
  *
  * This software is available to you under a choice of one of two
@@ -252,7 +252,7 @@ static int bind_ep_res(struct per_thread_data *ptd)
 	int ret;
 
 	/* Bind Send CQ with endpoint to collect send completions */
-	ret = fi_ep_bind(ptd->ep, &ptd->scq->fid, FI_SEND|FI_WRITE);
+	ret = fi_ep_bind(ptd->ep, &ptd->scq->fid, FI_TRANSMIT);
 	if (ret) {
 		FT_PRINTERR("fi_ep_bind", ret);
 		return ret;

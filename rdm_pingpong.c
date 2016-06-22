@@ -232,7 +232,7 @@ static int bind_ep_res(struct per_thread_data *ptd)
 	int ret;
 
 	/* Bind Send CQ with endpoint to collect send completions */
-	ret = fi_ep_bind(ptd->ep, &ptd->scq->fid, FI_SEND|FI_WRITE);
+	ret = fi_ep_bind(ptd->ep, &ptd->scq->fid, FI_TRANSMIT);
 	if (ret) {
 		FT_PRINTERR("fi_ep_bind", ret);
 		return ret;
