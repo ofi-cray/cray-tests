@@ -1,0 +1,13 @@
+Libfabric OMB (OSU Micro-Benchmarks) Ports
+------------------------------------------
+This directory contains several tests from the OSU micro-benchmark suite ported
+to Libfabric.
+
+The original OSU micro-benchmarks can be downloaded at:
+
+http://mvapich.cse.ohio-state.edu/benchmarks/
+
+Known Issues
+-------------
+-For a more accurate comparison between MPI and Libfabric performance, the
+Libfabric tests should use tagged messaging interfaces.
