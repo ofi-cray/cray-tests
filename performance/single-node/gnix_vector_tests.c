@@ -31,14 +31,14 @@
  */
 
 #include <ct_utils.h>
-#include <gnix_vector.h>
+#include "gnix_vector.h"
 
 /* Test variables */
 static gnix_vector_t vec;
 static gnix_vec_attr_t attr;
 static void *tmp;
 
-#define VEC_SZ  1024*1024*1024
+#define VEC_SZ  1024*1024*256
 
 
 static void setup(void)
@@ -50,6 +50,9 @@ static void setup(void)
 	attr.vec_initial_size = VEC_SZ;
 	attr.vec_internal_locking = GNIX_VEC_UNLOCKED;
 	attr.vec_maximum_size = VEC_SZ;
+
+	ret = _gnix_vec_init(&vec, &attr);
+	assert(!ret);
 }
 
 static void teardown(void)
@@ -57,7 +60,7 @@ static void teardown(void)
 	int ret;
 
 	ret = _gnix_vec_close(&vec);
-	cr_assert(!ret, "_gnix_vec_close");
+	assert(!ret);
 }
 
 static void warmup(unsigned iters)
@@ -65,7 +68,7 @@ static void warmup(unsigned iters)
 	int i;
 
 	for (i = 0; i < iters; i++) {
-		_gnix_vec_insert_at(&vec, 0xdeadbeef);
+		_gnix_vec_insert_at(&vec, (void *) 0xdeadbeef, i);
 		_gnix_vec_at(&vec, &tmp, i);
 		_gnix_vec_remove_at(&vec, i);
 	}
@@ -79,7 +82,7 @@ static void ops_table_test(unsigned iters)
 	START_CLOCK;
 
 	for (i = 0; i < iters; i++) {
-		vec.ops->insert_at(&vec, 0xdeadbeef);
+		vec.ops->insert_at(&vec, (void *) 0xdeadbeef, i);
 	}
 
 	for (i = 0; i < iters; i++) {
@@ -96,10 +99,12 @@ static void ops_table_test(unsigned iters)
 
 static void no_ops_table_test(unsigned iters)
 {
+	int i;
+
 	START_CLOCK;
 
 	for (i = 0; i < iters; i++) {
-		_gnix_vec_insert_at(&vec, 0xdeadbeef);
+		_gnix_vec_insert_at(&vec, (void *) 0xdeadbeef, i);
 	}
 
 	for (i = 0; i < iters; i++) {
