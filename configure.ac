@@ -29,7 +29,14 @@ AC_ARG_WITH([libfabric],
             AC_HELP_STRING([--with-libfabric], [Use non-default libfabric location - default NO]),
             [AS_IF([test -d $withval/lib64], [fab_libdir="lib64"], [fab_libdir="lib"])
              CPPFLAGS="-I $withval/include $CPPFLAGS"
-             LDFLAGS="-L$withval/$fab_libdir $LDFLAGS"],
+             LDFLAGS="-L$withval/$fab_libdir $LDFLAGS"
+	     CFLAGS="$withval/$fab_libdir/libfabric.a"],
+            [])
+
+AC_ARG_WITH([libfabric-src],
+            AC_HELP_STRING([--with-libfabric-src], [Specify libfabric-src directory when building binaries that call libfabric provider routines - default NO]),
+            [
+             CPPFLAGS="-I $withval/include -I $withval/prov/gni/include $CPPFLAGS $CRAY_GNI_HEADERS_INCLUDE_OPTS"],
             [])
 
 dnl I think we'd rather just search for the pmi module
