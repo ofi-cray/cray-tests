@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015 Cray Inc.  All rights reserved.
+ * Copyright (c) 2015-2016 Cray Inc.  All rights reserved.
  *
  * This software is available to you under a choice of one of two
  * licenses.  You may choose to be licensed under the terms of the GNU
@@ -46,7 +46,14 @@
 #include <dlfcn.h>
 
 #include "pmi.h"
-#include "ft_utils.h"
+#include <rdma/fabric.h>
+#include <rdma/fi_domain.h>
+#include <rdma/fi_errno.h>
+#include <rdma/fi_endpoint.h>
+#include <rdma/fi_cm.h>
+#include <rdma/fi_rma.h>
+#include "ct_utils.h"
+#include "pmi.h"
 
 #ifndef CRAY_PMI_COLL
 
@@ -246,17 +253,17 @@ static void allgather(void *in, void *out, int len)
 	free(tmp_buf);
 }
 
-void FT_Exit(void)
+void ctpm_Exit(void)
 {
 	PMI_Abort(0, "Terminating application successfully");
 }
 
-void FT_Abort(void)
+void ctpm_Abort(void)
 {
 	PMI_Abort(-1, "pmi abort called");
 }
 
-void FT_Barrier(void)
+void ctpm_Barrier(void)
 {
 	int __attribute__((unused)) rc;
 
@@ -264,7 +271,7 @@ void FT_Barrier(void)
 	assert(rc == PMI_SUCCESS);
 }
 
-void FT_Init(int *argc, char ***argv)
+void ctpm_Init(int *argc, char ***argv)
 {
 	int __attribute__((unused)) rc;
 	int first_spawned;
@@ -282,7 +289,7 @@ void FT_Init(int *argc, char ***argv)
 	pmi_coll_init();
 }
 
-void FT_Rank(int *rank)
+void ctpm_Rank(int *rank)
 {
 	int __attribute__((unused)) rc;
 
@@ -290,12 +297,12 @@ void FT_Rank(int *rank)
 	assert(rc == PMI_SUCCESS);
 }
 
-void FT_Finalize(void)
+void ctpm_Finalize(void)
 {
 	PMI_Finalize();
 }
 
-void FT_Job_size(int *nranks)
+void ctpm_Job_size(int *nranks)
 {
 	int __attribute__((unused)) rc;
 
@@ -303,12 +310,12 @@ void FT_Job_size(int *nranks)
 	assert(rc == PMI_SUCCESS);
 }
 
-void FT_Allgather(void *src, size_t len_per_rank, void *targ)
+void ctpm_Allgather(void *src, size_t len_per_rank, void *targ)
 {
 	allgather(src, targ, len_per_rank);
 }
 
-void FT_Bcast(void *buffer, size_t len)
+void ctpm_Bcast(void *buffer, size_t len)
 {
 	int __attribute__((unused)) rc;
 

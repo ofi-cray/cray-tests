@@ -1,6 +1,4 @@
 /*
- * Copyright (C) 2002-2012 the Network-Based Computing Laboratory
- * Copyright (c) 2013-2014 Intel Corporation.  All rights reserved.
  * Copyright (c) 2015-2016 Cray Inc.  All rights reserved.
  * Copyright (c) 2015 Los Alamos National Security, LLC. All rights reserved.
  *
@@ -47,8 +45,7 @@
 #include <rdma/fi_cm.h>
 #include <rdma/fi_rma.h>
 
-#include "ft_utils.h"
-#include "shared.h"
+#include "ct_utils.h"
 
 #define MAX_ALIGNMENT 65536
 #define MAX_MSG_SIZE (1<<22)
@@ -101,12 +98,6 @@ buf_desc_t *rbuf_descs;
 
 int myid, numprocs;
 
-void print_usage(void)
-{
-	if (!myid)
-		ft_basic_usage(TEST_DESC);
-}
-
 static void cq_readerr(struct fid_cq *cq, const char *cq_str)
 {
 	struct fi_cq_err_entry cq_err;
@@ -115,7 +106,7 @@ static void cq_readerr(struct fid_cq *cq, const char *cq_str)
 
 	ret = fi_cq_readerr(cq, &cq_err, 0);
 	if (ret < 0) {
-		FT_PRINTERR("fi_cq_readerr", ret);
+		ct_print_fi_error("fi_cq_readerr", ret);
 	} else {
 		err_str = fi_cq_strerror(cq, cq_err.prov_errno, cq_err.err_data,
 					NULL, 0);
@@ -129,7 +120,7 @@ static void cq_readerr(struct fid_cq *cq, const char *cq_str)
 /*
  * fi_cq_err_entry can be cast to any CQ entry format.
  */
-static int ft_wait_for_comp_omb(struct fid_cq *cq, int num_completions)
+static int wait_for_comp(struct fid_cq *cq, int num_completions)
 {
 	struct fi_cq_err_entry comp;
 	int ret;
@@ -142,7 +133,7 @@ static int ft_wait_for_comp_omb(struct fid_cq *cq, int num_completions)
 			if (ret == -FI_EAVAIL) {
 				cq_readerr(cq, "cq");
 			} else {
-				FT_PRINTERR("fi_cq_read", ret);
+				ct_print_fi_error("fi_cq_read", ret);
 			}
 			return ret;
 		}
@@ -172,14 +163,14 @@ static int alloc_ep_res(void)
 	/* Open completion queue for send completions */
 	ret = fi_cq_open(dom, &cq_attr, &scq, NULL);
 	if (ret) {
-		FT_PRINTERR("fi_cq_open", ret);
+		ct_print_fi_error("fi_cq_open", ret);
 		goto err1;
 	}
 
 	/* Open completion queue for recv completions */
 	ret = fi_cq_open(dom, &cq_attr, &rcq, NULL);
 	if (ret) {
-		FT_PRINTERR("fi_cq_open", ret);
+		ct_print_fi_error("fi_cq_open", ret);
 		goto err2;
 	}
 
@@ -192,7 +183,7 @@ static int alloc_ep_res(void)
 	/* Open address vector (AV) for mapping address */
 	ret = fi_av_open(dom, &av_attr, &av, NULL);
 	if (ret) {
-		FT_PRINTERR("fi_av_open", ret);
+		ct_print_fi_error("fi_av_open", ret);
 		 goto err3;
 	 }
 
@@ -213,27 +204,27 @@ static int bind_ep_res(void)
 	/* Bind Send CQ with endpoint to collect send completions */
 	ret = fi_ep_bind(ep, &scq->fid, FI_TRANSMIT);
 	if (ret) {
-		FT_PRINTERR("fi_ep_bind", ret);
+		ct_print_fi_error("fi_ep_bind", ret);
 		return ret;
 	}
 
 	/* Bind Recv CQ with endpoint to collect recv completions */
 	ret = fi_ep_bind(ep, &rcq->fid, FI_RECV);
 	if (ret) {
-		FT_PRINTERR("fi_ep_bind", ret);
+		ct_print_fi_error("fi_ep_bind", ret);
 		return ret;
 	}
 
 	/* Bind AV with the endpoint to map addresses */
 	ret = fi_ep_bind(ep, &av->fid, 0);
 	if (ret) {
-		FT_PRINTERR("fi_ep_bind", ret);
+		ct_print_fi_error("fi_ep_bind", ret);
 		return ret;
 	}
 
 	ret = fi_enable(ep);
 	if (ret) {
-		FT_PRINTERR("fi_enable", ret);
+		ct_print_fi_error("fi_enable", ret);
 		return ret;
 	 }
 
@@ -246,30 +237,30 @@ static int init_fabric(void)
 	uint64_t flags = 0;
 
 	/* Get fabric info */
-	ret = fi_getinfo(FT_FIVERSION, NULL, NULL, flags, hints, &fi);
+	ret = fi_getinfo(CT_FIVERSION, NULL, NULL, flags, hints, &fi);
 	if (ret) {
-		FT_PRINTERR("fi_getinfo", ret);
+		ct_print_fi_error("fi_getinfo", ret);
 		return ret;
 	}
 
 	/* Open fabric */
 	ret = fi_fabric(fi->fabric_attr, &fab, NULL);
 	if (ret) {
-		FT_PRINTERR("fi_fabric", ret);
+		ct_print_fi_error("fi_fabric", ret);
 		goto err1;
 	}
 
 	/* Open domain */
 	ret = fi_domain(fab, fi, &dom, NULL);
 	if (ret) {
-		FT_PRINTERR("fi_domain", ret);
+		ct_print_fi_error("fi_domain", ret);
 		goto err2;
 	}
 
 	/* Open endpoint */
 	ret = fi_endpoint(dom, fi, &ep, NULL);
 	if (ret) {
-		FT_PRINTERR("fi_endpoint", ret);
+		ct_print_fi_error("fi_endpoint", ret);
 		goto err3;
 	}
 
@@ -308,14 +299,14 @@ static int init_av(void)
 	assert(addr);
 	ret = fi_getname(&ep->fid, addr, &addrlen);
 	if (ret != 0) {
-		FT_PRINTERR("fi_getname", ret);
+		ct_print_fi_error("fi_getname", ret);
 		return ret;
 	}
 
 	addrs = malloc(numprocs * addrlen);
 	assert(addrs);
 
-	FT_Allgather(addr, addrlen, addrs);
+	ctpm_Allgather(addr, addrlen, addrs);
 
 	fi_addrs = malloc(numprocs * sizeof(fi_addr_t));
 	assert(fi_addrs);
@@ -323,7 +314,7 @@ static int init_av(void)
 	/* Insert address to the AV and get the fabric address back */
 	ret = fi_av_insert(av, addrs, numprocs, fi_addrs, 0, &fi_ctx_av);
 	if (ret != numprocs) {
-		FT_PRINTERR("fi_av_insert", ret);
+		ct_print_fi_error("fi_av_insert", ret);
 		return ret;
 	}
 
@@ -342,25 +333,13 @@ int main(int argc, char *argv[])
 	buf_desc_t lbuf_desc;
 	ssize_t fi_rc;
 
-	FT_Init(&argc, &argv);
-	FT_Rank(&myid);
-	FT_Job_size(&numprocs);
+	ctpm_Init(&argc, &argv);
+	ctpm_Rank(&myid);
+	ctpm_Job_size(&numprocs);
 
 	hints = fi_allocinfo();
 	if (!hints)
 		return -1;
-
-	while ((op = getopt(argc, argv, "h" INFO_OPTS)) != -1) {
-		switch (op) {
-		default:
-			ft_parseinfo(op, optarg, hints);
-			break;
-		case '?':
-		case 'h':
-			print_usage();
-			return EXIT_FAILURE;
-		}
-	}
 
 	hints->ep_attr->type	= FI_EP_RDM;
 	hints->caps		= FI_MSG | FI_DIRECTED_RECV | FI_RMA;
@@ -371,7 +350,7 @@ int main(int argc, char *argv[])
 		if (myid == 0) {
 			fprintf(stderr, "This test requires exactly two processes\n");
 		}
-		FT_Finalize();
+		ctpm_Finalize();
 		return -1;
 	}
 
@@ -399,7 +378,7 @@ int main(int argc, char *argv[])
 
 	ret = fi_mr_reg(dom, r_buf, MYBUFSIZE, FI_REMOTE_WRITE, 0, 0, 0, &r_mr, NULL);
 	if (ret) {
-		FT_PRINTERR("fi_mr_reg", ret);
+		ct_print_fi_error("fi_mr_reg", ret);
 		return -1;
 	}
 
@@ -409,11 +388,11 @@ int main(int argc, char *argv[])
 	rbuf_descs = (buf_desc_t *)malloc(numprocs * sizeof(buf_desc_t));
 
 	/* Distribute memory keys */
-	FT_Allgather(&lbuf_desc, sizeof(lbuf_desc), rbuf_descs);
+	ctpm_Allgather(&lbuf_desc, sizeof(lbuf_desc), rbuf_descs);
 
 	ret = fi_mr_reg(dom, s_buf, MYBUFSIZE, FI_WRITE, 0, 0, 0, &l_mr, NULL);
 	if (ret) {
-		FT_PRINTERR("fi_mr_reg", ret);
+		ct_print_fi_error("fi_mr_reg", ret);
 		return -1;
 	}
 
@@ -438,7 +417,7 @@ int main(int argc, char *argv[])
 			window_size = window_size_large;
 		}
 
-		FT_Barrier();
+		ctpm_Barrier();
 
 		if (myid == 0) {
 			peer = 1;
@@ -455,12 +434,12 @@ int main(int argc, char *argv[])
 							rbuf_descs[peer].key,
 							(void *)(intptr_t)j);
 					if (fi_rc) {
-						FT_PRINTERR("fi_write", fi_rc);
+						ct_print_fi_error("fi_write", fi_rc);
 						return fi_rc;
 					}
 				}
 
-				ft_wait_for_comp_omb(scq, window_size);
+				wait_for_comp(scq, window_size);
 			}
 
 			t_end = get_time_usec();
@@ -483,7 +462,7 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	FT_Barrier();
+	ctpm_Barrier();
 
 	fi_close(&l_mr->fid);
 	fi_close(&r_mr->fid);
@@ -497,8 +476,8 @@ int main(int argc, char *argv[])
 	fi_freeinfo(hints);
 	fi_freeinfo(fi);
 
-	FT_Barrier();
-	FT_Finalize();
+	ctpm_Barrier();
+	ctpm_Finalize();
 	return 0;
 }
 

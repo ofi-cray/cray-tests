@@ -1,6 +1,7 @@
 /*
- * Copyright (c) 2015 Cray Inc.  All rights reserved.
- *
+ * Copyright (c) 2016 Los Alamos National Security, LLC. All rights reserved.
+ * Copyright (c) 2016 Cray Inc.  All rights reserved.
+*
  * This software is available to you under a choice of one of two
  * licenses.  You may choose to be licensed under the terms of the GNU
  * General Public License (GPL) Version 2, available from the file
@@ -30,21 +31,57 @@
  * SOFTWARE.
  */
 
-#ifndef _FT_UTILS_H
-#define _FT_UTILS_H
+#ifndef CT_TBARRIER_H
+#define CT_TBARRIER_H
 
-#include <sys/utsname.h>
+#include <stdlib.h>
+#include <stdatomic.h>
 
-#include "pmi.h"
+typedef struct {
+	int phase[2];
+	int slot;
+	int njoiners;
+	atomic_int *counter[2];
+	atomic_int *signal[2];
+} fabtests_tbar_t;
 
-void FT_Init(int *, char ***);
-void FT_Abort(void);
-void FT_Exit(void);
-void FT_Rank(int *);
-void FT_Finalize(void);
-void FT_Barrier(void);
-void FT_Job_size(int *);
-void FT_Allgather(void *src, size_t, void *dest);
-void FT_Bcast(void *, size_t);
+static void ct_tbarrier(fabtests_tbar_t *tbar)
+{
+	int njoiners;
+	int val;
 
-#endif /* _FT_UTILS_H */
+	njoiners = atomic_fetch_add(tbar->counter[tbar->slot],1);
+
+	/*
+	 * if I'm the last one to join, reset counter to 0
+	 * and toggle signal variable
+	 */
+
+	if ((njoiners + 1) ==  tbar->njoiners) {
+		atomic_store(tbar->counter[tbar->slot], 0);
+		atomic_store(tbar->signal[tbar->slot],
+			     1 - tbar->phase[tbar->slot]);
+	} else {
+		do {
+			val = atomic_load(tbar->signal[tbar->slot]);
+		} while (val == tbar->phase[tbar->slot]);
+	}
+
+	tbar->phase[tbar->slot] = 1 - tbar->phase[tbar->slot];
+	tbar->slot = 1 - tbar->slot;
+
+}
+
+static void ct_tbarrier_init(fabtests_tbar_t *tbar, int njoiners,
+			  atomic_int *counter, atomic_int *signal)
+{
+	tbar->njoiners = njoiners;
+	tbar->counter[0] = &counter[0];
+	tbar->counter[1] = &counter[1];
+	tbar->signal[0] = &signal[0];
+	tbar->signal[1] = &signal[1];
+	tbar->phase[0] = tbar->phase[1] = 0;
+	tbar->slot = 0;
+}
+
+#endif /* CT_TBARRIER_H */

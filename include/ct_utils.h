@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016 Los Alamos National Security, LLC. All rights reserved.
+ * Copyright (c) 2015-2016 Cray Inc.  All rights reserved.
  *
  * This software is available to you under a choice of one of two
  * licenses.  You may choose to be licensed under the terms of the GNU
@@ -30,57 +30,49 @@
  * SOFTWARE.
  */
 
-#ifndef FT_TBARRIER_H
-#define FT_TBARRIER_H
+#ifndef CT_UTILS_H
+#define CT_UTILS_H
 
-#include <stdlib.h>
-#include <stdatomic.h>
+#ifndef CT_FIVERSION
+#define CT_FIVERSION FI_VERSION(1,3)
+#endif
 
-typedef struct {
-	int phase[2];
-	int slot;
-	int njoiners;
-	atomic_int *counter[2];
-	atomic_int *signal[2];
-} fabtests_tbar_t;
-
-static void tbarrier(fabtests_tbar_t *tbar)
+static inline void ct_print_fi_error(const char *fi_fname, int ret_val)
 {
-	int njoiners;
-	int val;
-
-	njoiners = atomic_fetch_add(tbar->counter[tbar->slot],1);
-
-	/*
-	 * if I'm the last one to join, reset counter to 0
-	 * and toggle signal variable
-	 */
-
-	if ((njoiners + 1) ==  tbar->njoiners) {
-		atomic_store(tbar->counter[tbar->slot], 0);
-		atomic_store(tbar->signal[tbar->slot],
-			     1 - tbar->phase[tbar->slot]);
-	} else {
-		do {
-			val = atomic_load(tbar->signal[tbar->slot]);
-		} while (val == tbar->phase[tbar->slot]);
-	}
-
-	tbar->phase[tbar->slot] = 1 - tbar->phase[tbar->slot];
-	tbar->slot = 1 - tbar->slot;
-
+	fprintf(stderr, "%s() ret=%d (%s)\n", fi_fname, ret_val,
+		fi_strerror(ret_val));
+	fflush(stdout);
 }
 
-static void tbarrier_init(fabtests_tbar_t *tbar, int njoiners,
-			  atomic_int *counter, atomic_int *signal)
+static inline void ct_print_opts_usage(const char *opt, const char *desc)
 {
-	tbar->njoiners = njoiners;
-	tbar->counter[0] = &counter[0];
-	tbar->counter[1] = &counter[1];
-	tbar->signal[0] = &signal[0];
-	tbar->signal[1] = &signal[1];
-	tbar->phase[0] = tbar->phase[1] = 0;
-	tbar->slot = 0;
+	fprintf(stderr, " %-20s %s\n", opt, desc);
 }
 
-#endif /* FT_TBARRIER_H */
+void ct_parseinfo(int op, char *optarg, struct fi_info *hints);
+
+/* general utilities */
+#include <sys/time.h>
+static inline uint64_t get_time_usec(void)
+{
+	struct timeval tv;
+	uint64_t usecs;
+
+	gettimeofday(&tv, NULL);
+	usecs = (tv.tv_sec * 1000000) + tv.tv_usec;
+	return usecs;
+}
+
+/* out-of-band process management stuff */
+
+void ctpm_Init(int *, char ***);
+void ctpm_Abort(void);
+void ctpm_Exit(void);
+void ctpm_Rank(int *);
+void ctpm_Finalize(void);
+void ctpm_Barrier(void);
+void ctpm_Job_size(int *);
+void ctpm_Allgather(void *src, size_t, void *dest);
+void ctpm_Bcast(void *, size_t);
+
+#endif /* CT_UTILS_H */
