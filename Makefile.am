@@ -14,7 +14,8 @@ bin_PROGRAMS = \
 
 noinst_LTLIBRARIES = libcraytests.la
 libcraytests_la_SOURCES = \
-	common/ct_utils.c
+	common/ct_utils.c \
+	common/print_utils.c
 
 ################################################################################
 # Multi-node sources
@@ -48,7 +49,8 @@ performance_single_node_lock_tests_LDADD = libcraytests.la
 
 EXTRA_DIST = \
 	ct_utils.h \
-	ct_tbarrier.h
+	ct_tbarrier.h \
+	print_utils.h
 
 if HAVE_PMI
 AM_CFLAGS += -lpmi
