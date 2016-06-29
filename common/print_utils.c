@@ -104,7 +104,7 @@ struct info {
  *
  * @return the new size of the buffer on success; otherwise -1.
  */
-inline int __grow_buf(void **buf, int cur_sz)
+int __grow_buf(void **buf, int cur_sz)
 {
 	char *tmp;
 
@@ -123,25 +123,24 @@ inline int __grow_buf(void **buf, int cur_sz)
 /*******************************************************************************
  * API FNS
  ******************************************************************************/
-inline info_t *init_info(char *test_name, char *csv_path, char *csv_header)
+info_t *init_info(char *test_name, char *csv_path)
 {
 	int ret;
 	info_t *info = calloc(1, sizeof(info_t));
-	struct stat st;
 
 	assert(info);
 
 	if (test_name) {
 		/* Ensure test name ends in newline */
 		if (!strchr(test_name, '\n')) {
-			info->test_name = malloc(strlen(test_name) + 2);
+			info->test_name = malloc(strlen(test_name) + 3);
 			memcpy(info->test_name, test_name, strlen(test_name) + 1);
-			strncat(info->test_name, "\n", 1);
+			strncat(info->test_name, "\n", 3);
 		} else {
 			info->test_name = strdup(test_name);
 		}
 
-		ret = write(STDOUT_FD, info->test_name, strlen(test_name));
+		ret = write(STDOUT_FD, info->test_name, strlen(test_name) + 1);
 
 		__CHK_WRITE_ERR(ret, info);
 	} else {
@@ -152,46 +151,14 @@ inline info_t *init_info(char *test_name, char *csv_path, char *csv_header)
 
 	if (csv_path) {
 		info->csv_path = strdup(csv_path);
-		if (!csv_header) {
-			fprintf(stderr, "ERROR in init_info, please provide a "
-				"non-NULL csv_header.\n");
-			goto err;
-		}
 
-		info->csv_fd = open(csv_path, O_APPEND);
+		info->csv_fd = open(csv_path, O_APPEND|O_WRONLY);
 
 		/* Report error if error isn't that the file doesn't exist */
 		if (info->csv_fd == -1 && errno != ENOENT) {
 			fprintf(stderr, "Unable to open '%s', open returned %s\n",
 				csv_path, strerror(errno));
 			goto err;
-		}
-
-		/* Check if the file was opened */
-		if (info->csv_fd != -1) {
-			ret = fstat(info->csv_fd, &st);
-
-			if (ret == -1) {
-				fprintf(stderr, "Unable to stat info->csv_fd (%d), "
-					"fstat returned %s\n", info->csv_fd,
-					strerror(errno));
-				goto err;
-			}
-
-			/* If the file size is zero, append the csv header */
-			if (st.st_size == 0) {
-				/* Ensure header end in newline */
-				if (!strchr(csv_header, '\n')) {
-					info->csv_header = malloc(strlen(csv_header) + 2);
-					memcpy(info->csv_header, csv_header, strlen(csv_header) + 1);
-					strncat(info->csv_header, "\n", 1);
-				} else {
-					info->csv_header = strdup(csv_header);
-				}
-				ret = write(info->csv_fd, info->csv_header, strlen(csv_header));
-
-				__CHK_WRITE_ERR(ret, info);
-			}
 		}
 	}
 
@@ -208,7 +175,7 @@ err:
 	return NULL;
 }
 
-inline void add_line(info_t *info, char *fmt, ...)
+void add_line(info_t *info, char *fmt, ...)
 {
 	int ret, tbw, cbw, t;
 	va_list vl;
@@ -249,7 +216,8 @@ inline void add_line(info_t *info, char *fmt, ...)
 			     cbw < info->cbuf_sz && t < info->tbuf_cnt; t++) {
 				/* Hopefully the va list doesn't contain strings
 				 * with spaces */
-				if (isspace(info->tbuf[t])) {
+				if (isspace(info->tbuf[t]) &&
+				    info->tbuf[t] != '\n') {
 					if (t + 1 < info->tbuf_sz &&
 					    !isspace(info->tbuf[t + 1])) {
 						info->cbuf[cbw++] = ',';
@@ -280,7 +248,7 @@ inline void add_line(info_t *info, char *fmt, ...)
 	}
 }
 
-inline void print_data(info_t *info)
+void print_data(info_t *info)
 {
 	int ret;
 
@@ -297,7 +265,7 @@ inline void print_data(info_t *info)
 	}
 }
 
-inline void fini_info(info_t *info)
+void fini_info(info_t *info)
 {
 	int ret;
 	if (info->test_name) {
@@ -326,11 +294,16 @@ inline void fini_info(info_t *info)
 		free(info->cbuf);
 	}
 
-	ret = close(info->csv_fd);
+	if (info->csv_fd != -1) {
+		ret = close(info->csv_fd);
 
-	if (ret == -1) {
-		fprintf(stderr, "ERROR: close returned %s\n", strerror(errno));
+		if (ret == -1) {
+			fprintf(stderr, "ERROR: close returned %s\n",
+				strerror(errno));
+		}
 	}
+
+
 
 	free(info);
 }

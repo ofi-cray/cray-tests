@@ -55,7 +55,7 @@ typedef struct info info_t;
  *
  * @return an instance of the info structure.
  */
-inline info_t *init_info(char *test_name, char *csv_path, char *csv_header);
+info_t *init_info(char *test_name, char *csv_path);
 
 /**
  * Adds a line of data to the the internal print buffers.
@@ -68,7 +68,7 @@ inline info_t *init_info(char *test_name, char *csv_path, char *csv_header);
  * @param fmt  C format string specifying the output format.
  * @param ...  optional varargs list that accompanies the fmt string.
  */
-inline void add_line(info_t *info, char *fmt, ...);
+void add_line(info_t *info, char *fmt, ...);
 
 /**
  * Flushes the non-empty internal buffer(s) causing formatted data to be
@@ -76,7 +76,7 @@ inline void add_line(info_t *info, char *fmt, ...);
  *
  * @param info the info instance returned by init_info().
  */
-inline void print_data(info_t *info);
+void print_data(info_t *info);
 
 /**
  * This function should be called before exiting the benchmark.
@@ -86,5 +86,5 @@ inline void print_data(info_t *info);
  *
  * @param info the info instance returned by init_info().
  */
-inline void fini_info(info_t *info);
+void fini_info(info_t *info);
 #endif	/* _PRINT_UTILS_H_ */
