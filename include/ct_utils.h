@@ -41,6 +41,9 @@ static char clock_started, is_clock_lock_init;
 #define CT_FIVERSION FI_VERSION(1,3)
 #endif
 
+#include "rdma/fi_errno.h"
+#include "rdma/fabric.h"
+
 static inline void ct_print_fi_error(const char *fi_fname, int ret_val)
 {
 	fprintf(stderr, "%s() ret=%d (%s)\n", fi_fname, ret_val,
@@ -58,6 +61,8 @@ void ct_parseinfo(int op, char *optarg, struct fi_info *hints);
 /* general utilities */
 #include <sys/time.h>
 #include <time.h>
+#include <stdint.h>
+
 static inline uint64_t get_time_usec(void)
 {
 	struct timeval tv;

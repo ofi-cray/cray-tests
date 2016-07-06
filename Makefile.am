@@ -2,17 +2,11 @@ AM_CFLAGS = -I$(srcdir)/include
 ACLOCAL_AMFLAGS = -I config
 
 bin_PROGRAMS = \
-################################################################################
-# Multi-node bins
-################################################################################
 	performance/multi-node/rdm_bw \
 	performance/multi-node/rdm_latency \
 	performance/multi-node/rdm_mbw_mr \
 	performance/multi-node/rdm_pingpong \
 	performance/multi-node/rdm_one_sided \
-################################################################################
-# Single-node bins
-################################################################################
 	performance/single-node/lock_tests
 
 # dist_bin_SCRIPTS = \
