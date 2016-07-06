@@ -44,24 +44,11 @@
 #include <ctype.h>
 #include <stdarg.h>
 
-#include "print_utils.h"
+#include "ct_print_utils.h"
 
 #define INIT_BUF_LEN 	4096		       /* 4KB initial buf size */
 #define MAX_BUF_LEN	4096 * 4096 * 64       /* 1GB max buf size */
 #define STDOUT_FD 	1
-
-/*******************************************************************************
- * HELPER MACROS
- ******************************************************************************/
-#define __CHK_WRITE_ERR(ret, info)					\
-	do {								\
-		if ((int) (ret) == -1) {				\
-			fprintf(stderr, "ERROR: write returned %s\n",	\
-				strerror(errno));			\
-			fini_info(info);				\
-			abort();					\
-		}							\
-	} while(0)
 
 /**
  * @var test_name  the name of the test.
@@ -94,9 +81,25 @@ struct info {
 	int  csv_fd;
 };
 
+
 /*******************************************************************************
  * HELPER FNS
  ******************************************************************************/
+/**
+ * Check for a write error.
+ * @param ret  the return value of write (2).
+ * @param info the info structure used for the given write call.
+ */
+static inline void __chk_write_err(int ret, ct_info_t *info)
+{
+	if ((int) (ret) == -1) {
+		fprintf(stderr, "ERROR: write returned %s\n",
+			strerror(errno));
+		ct_fini_info(info);
+		abort();
+	}
+}
+
 /**
  * Double the size of the buf.
  * @var buf    pointer to the buffer to grow
@@ -123,10 +126,10 @@ int __grow_buf(void **buf, int cur_sz)
 /*******************************************************************************
  * API FNS
  ******************************************************************************/
-info_t *init_info(char *test_name, char *csv_path)
+ct_info_t *ct_init_info(char *test_name, char *csv_path)
 {
 	int ret;
-	info_t *info = calloc(1, sizeof(info_t));
+	ct_info_t *info = calloc(1, sizeof(ct_info_t));
 
 	assert(info);
 
@@ -142,7 +145,7 @@ info_t *init_info(char *test_name, char *csv_path)
 
 		ret = write(STDOUT_FD, info->test_name, strlen(test_name) + 1);
 
-		__CHK_WRITE_ERR(ret, info);
+		__chk_write_err(ret, info);
 	} else {
 		fprintf(stderr, "ERROR in init_info, please provide a non-NULL "
 			"test_name.\n");
@@ -171,11 +174,11 @@ info_t *init_info(char *test_name, char *csv_path)
 	return info;
 
 err:
-	fini_info(info);
+	ct_fini_info(info);
 	return NULL;
 }
 
-void add_line(info_t *info, char *fmt, ...)
+void ct_add_line(ct_info_t *info, char *fmt, ...)
 {
 	int ret, tbw, cbw, t;
 	va_list vl;
@@ -191,11 +194,11 @@ void add_line(info_t *info, char *fmt, ...)
 			if (info->tbuf_cnt == 0) {
 				fprintf(stderr, "ERROR: in add_line, va list "
 					"too large or system out of memory.\n");
-				fini_info(info);
+				ct_fini_info(info);
 				abort();
 			}
 			ret = write(STDOUT_FD, info->tbuf, info->tbuf_cnt);
-			__CHK_WRITE_ERR(ret, info);
+			__chk_write_err(ret, info);
 
 			info->tbuf_cnt = 0;
 		} else {
@@ -237,7 +240,7 @@ void add_line(info_t *info, char *fmt, ...)
 				if (ret == -1) {
 					ret = write(info->csv_fd, info->cbuf,
 						    info->cbuf_cnt);
-					__CHK_WRITE_ERR(ret, info);
+					__chk_write_err(ret, info);
 
 					info->cbuf_cnt = 0;
 				} else {
@@ -248,24 +251,24 @@ void add_line(info_t *info, char *fmt, ...)
 	}
 }
 
-void print_data(info_t *info)
+void ct_print_data(ct_info_t *info)
 {
 	int ret;
 
 	/* write to table */
 	if (info->tbuf_cnt) {
 		ret = write(STDOUT_FD, info->tbuf, info->tbuf_cnt);
-		__CHK_WRITE_ERR(ret, info);
+		__chk_write_err(ret, info);
 	}
 
 	/* write to csv */
 	if (info->csv_fd != -1 && info->cbuf_cnt) {
 		ret = write(info->csv_fd, info->cbuf, info->cbuf_cnt);
-		__CHK_WRITE_ERR(ret, info);
+		__chk_write_err(ret, info);
 	}
 }
 
-void fini_info(info_t *info)
+void ct_fini_info(ct_info_t *info)
 {
 	int ret;
 	if (info->test_name) {
@@ -282,14 +285,14 @@ void fini_info(info_t *info)
 
 	if (info->tbuf_cnt && info->tbuf) {
 		ret = write(STDOUT_FD, info->tbuf, info->tbuf_cnt);
-		__CHK_WRITE_ERR(ret, info);
+		__chk_write_err(ret, info);
 
 		free(info->tbuf);
 	}
 
 	if (info->cbuf_cnt) {
 		ret = write(info->csv_fd, info->cbuf, info->cbuf_cnt);
-		__CHK_WRITE_ERR(ret, info);
+		__chk_write_err(ret, info);
 
 		free(info->cbuf);
 	}

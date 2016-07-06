@@ -43,7 +43,7 @@
 #include <assert.h>
 #include <stdio.h>
 
-#include "print_utils.h"
+#include "ct_print_utils.h"
 #include "ct_utils.h"
 
 static pthread_barrier_t barrier;
@@ -147,40 +147,27 @@ int main(int argc, char **argv)
 	char *test_name   = "---rwlock---";
 	char *csv_header  = "runtime(s),cpu_time";
 	char *csv_path	  = "./lock-tests.csv";
-	info_t *info;
+	ct_info_t *info;
 
-	info = init_info(test_name, csv_path);
-	assert(info);
+	info = ct_init_info(test_name, csv_path);
 
-	add_line(info, "%-*s%-*s\n", FIELD_WIDTH, "runtime(s)", FIELD_WIDTH,
-		 "cpu_time");
+	ct_add_line(info, "%-*s%-*s\n", FIELD_WIDTH, "runtime(s)", FIELD_WIDTH,
+		    "cpu_time");
 
 	/* n readers, n writers */
-	char *test_params = "nreaders = 10, nreads_per_reader = 2^20, nwriters = 10,"
-		" nwrites_per_writer = 2^20";
-
 	rwlock_test(10, 1<<20, 10, 1<<20);
-	/* printf("%s\n", test_params); */
-	add_line(info, "%-*g%-*g\n", FIELD_WIDTH,
-		 ct_wall_clock_time(), FIELD_WIDTH, ct_cpu_time());
+	ct_add_line(info, "%-*g%-*g\n", FIELD_WIDTH,
+		    ct_wall_clock_time(), FIELD_WIDTH, ct_cpu_time());
 
 	/* x readers, 1 writers */
-	test_params = "nreaders = 10, nreads_per_reader = 2^20, nwriters = 1,"
-		" nwrites_per_writer = 2^20";
-
 	rwlock_test(10, 1<<20, 1, 1<<20);
-	/* printf("%s\n", test_params); */
-	add_line(info, "%-*g%-*g\n", FIELD_WIDTH,
-		 ct_wall_clock_time(), FIELD_WIDTH, ct_cpu_time());
+	ct_add_line(info, "%-*g%-*g\n", FIELD_WIDTH,
+		    ct_wall_clock_time(), FIELD_WIDTH, ct_cpu_time());
 
 	/* x readers, no writers */
-	test_params = "nreaders = 10, nreads_per_reader = 2^20, nwriters = 0,"
-		" nwrites_per_writer = 2^20";
-
 	rwlock_test(10, 1<<20, 0, 1<<20);
-	/* printf("%s\n", test_params); */
-	add_line(info, "%-*g%-*g\n", FIELD_WIDTH,
-		 ct_wall_clock_time(), FIELD_WIDTH, ct_cpu_time());
+	ct_add_line(info, "%-*g%-*g\n", FIELD_WIDTH,
+		    ct_wall_clock_time(), FIELD_WIDTH, ct_cpu_time());
 
-	fini_info(info);
+	ct_fini_info(info);
 }
