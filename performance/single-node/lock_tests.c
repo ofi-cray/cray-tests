@@ -43,7 +43,7 @@
 #include <assert.h>
 #include <stdio.h>
 
-/* #include "print_utils.h" */
+#include "ct_print_utils.h"
 #include "ct_utils.h"
 
 static pthread_barrier_t barrier;
@@ -144,40 +144,30 @@ void rwlock_test(unsigned nreaders, unsigned nreads_per_reader,
  ******************************************************************************/
 int main(int argc, char **argv)
 {
-	char *test_name   = "rwlock";
-	char *csv_header  = "Date,runtime(s),cpu_time";
-	/* TODO: init_info(test_name, csv_header, arr_len) */
+	char *test_name   = "---rwlock---";
+	char *csv_header  = "runtime(s),cpu_time";
+	char *csv_path	  = "./lock-tests.csv";
+	ct_info_t *info;
+
+	info = ct_init_info(test_name, csv_path);
+
+	ct_add_line(info, "%-*s%-*s\n", FIELD_WIDTH, "runtime(s)", FIELD_WIDTH,
+		    "cpu_time");
 
 	/* n readers, n writers */
-	char *test_params = "nreaders = 10, nreads_per_reader = 2^20, nwriters = 10,"
-		" nwrites_per_writer = 2^20";
 	rwlock_test(10, 1<<20, 10, 1<<20);
-
-	/* TODO: print_utils should print the test_name & test_params followed by
-	 * the formatted output.
-	 * TODO: print_data(test_params);
-	 */
-
-	printf("%s\n%s\nruntime(s) = %-*gcpu_time = %-*g\n\n", test_name,
-	       test_params, FIELD_WIDTH, ct_wall_clock_time(), FIELD_WIDTH, ct_cpu_time());
+	ct_add_line(info, "%-*g%-*g\n", FIELD_WIDTH,
+		    ct_wall_clock_time(), FIELD_WIDTH, ct_cpu_time());
 
 	/* x readers, 1 writers */
-	test_params = "nreaders = 10, nreads_per_reader = 2^20, nwriters = 1,"
-		" nwrites_per_writer = 2^20";
-
 	rwlock_test(10, 1<<20, 1, 1<<20);
-
-	printf("%s\n%s\nruntime(s) = %-*gcpu_time = %-*g\n\n", test_name,
-	       test_params, FIELD_WIDTH, ct_wall_clock_time(), FIELD_WIDTH, ct_cpu_time());
+	ct_add_line(info, "%-*g%-*g\n", FIELD_WIDTH,
+		    ct_wall_clock_time(), FIELD_WIDTH, ct_cpu_time());
 
 	/* x readers, no writers */
-	test_params = "nreaders = 10, nreads_per_reader = 2^20, nwriters = 0,"
-		" nwrites_per_writer = 2^20";
-
 	rwlock_test(10, 1<<20, 0, 1<<20);
+	ct_add_line(info, "%-*g%-*g\n", FIELD_WIDTH,
+		    ct_wall_clock_time(), FIELD_WIDTH, ct_cpu_time());
 
-	printf("%s\n%s\nruntime(s) = %-*gcpu_time = %-*g\n\n", test_name,
-	       test_params, FIELD_WIDTH, ct_wall_clock_time(), FIELD_WIDTH, ct_cpu_time());
-
-	/* TODO: fini_info */
+	ct_fini_info(info);
 }
