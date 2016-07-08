@@ -31,10 +31,14 @@
  */
 
 /******* Tunable defines for testing different lock implementations *******/
-#define rlock_acquire  pthread_rwlock_rdlock
-#define rwlock_acquire pthread_rwlock_wrlock
-#define release        pthread_rwlock_unlock
-#define lock_t	       pthread_rwlock_t
+/* #define rlock_acquire  pthread_rwlock_rdlock */
+/* #define rwlock_acquire pthread_rwlock_wrlock */
+/* #define release        pthread_rwlock_unlock */
+/* #define lock_t	       pthread_rwlock_t */
+#define rlock_acquire  pthread_mutex_lock
+#define rwlock_acquire pthread_mutex_lock
+#define release        pthread_mutex_unlock
+#define lock_t	       pthread_mutex_t
 /**************************************************************************/
 #define FIELD_WIDTH 16
 
@@ -50,18 +54,24 @@ static pthread_barrier_t barrier;
 static pthread_t *writers, *readers;
 static lock_t lock;
 
+/* dummy write/read var. */
+static int np;
+
 /*******************************************************************************
  * Begin test functions
  ******************************************************************************/
 void *reader(void *arg)
 {
 	unsigned nreads = *(unsigned *)arg, i;
+	int p;
+
 	pthread_barrier_wait(&barrier);
 	ct_start_clock();
 
 	for (i = 0; i < nreads; i++) {
 		rlock_acquire(&lock);
-		/* read */
+		p = np;
+		assert(p == np);
 		release(&lock);
 	}
 
@@ -76,7 +86,7 @@ void *writer(void *arg)
 
 	for (i = 0; i < nwrites; i++) {
 		rwlock_acquire(&lock);
-		/* write */
+		np++;
 		release(&lock);
 	}
 
@@ -144,7 +154,7 @@ void rwlock_test(unsigned nreaders, unsigned nreads_per_reader,
  ******************************************************************************/
 int main(int argc, char **argv)
 {
-	char *test_name   = "---rwlock---";
+	char *test_name   = "---pthread_mutex(glibc-2.11.3)---";
 	char *csv_header  = "runtime(s),cpu_time";
 	char *csv_path	  = "./lock-tests.csv";
 	ct_info_t *info;
@@ -155,17 +165,17 @@ int main(int argc, char **argv)
 		    "cpu_time");
 
 	/* n readers, n writers */
-	rwlock_test(10, 1<<20, 10, 1<<20);
+	rwlock_test(1<<7, 1<<20, 1<<7, 1<<20);
 	ct_add_line(info, "%-*g%-*g\n", FIELD_WIDTH,
 		    ct_wall_clock_time(), FIELD_WIDTH, ct_cpu_time());
 
 	/* x readers, 1 writers */
-	rwlock_test(10, 1<<20, 1, 1<<20);
+	rwlock_test(1<<7, 1<<20, 1<<0, 1<<20);
 	ct_add_line(info, "%-*g%-*g\n", FIELD_WIDTH,
 		    ct_wall_clock_time(), FIELD_WIDTH, ct_cpu_time());
 
 	/* x readers, no writers */
-	rwlock_test(10, 1<<20, 0, 1<<20);
+	rwlock_test(1<<7, 1<<20, 0, 1<<20);
 	ct_add_line(info, "%-*g%-*g\n", FIELD_WIDTH,
 		    ct_wall_clock_time(), FIELD_WIDTH, ct_cpu_time());
 
