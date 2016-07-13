@@ -55,7 +55,7 @@ static pthread_t *writers, *readers;
 static lock_t lock;
 
 /* dummy write/read var. */
-static int np;
+static volatile int np;
 
 /*******************************************************************************
  * Begin test functions
@@ -64,6 +64,7 @@ void *reader(void *arg)
 {
 	unsigned nreads = *(unsigned *)arg, i;
 	int p;
+	volatile int tmp = 0;
 
 	pthread_barrier_wait(&barrier);
 	ct_start_clock();
@@ -72,6 +73,7 @@ void *reader(void *arg)
 		rlock_acquire(&lock);
 		p = np;
 		assert(p == np);
+		while (++tmp % 128);
 		release(&lock);
 	}
 
@@ -86,7 +88,7 @@ void *writer(void *arg)
 
 	for (i = 0; i < nwrites; i++) {
 		rwlock_acquire(&lock);
-		np++;
+		while (++np % 128);
 		release(&lock);
 	}
 
@@ -165,17 +167,17 @@ int main(int argc, char **argv)
 		    "cpu_time");
 
 	/* n readers, n writers */
-	rwlock_test(1<<7, 1<<20, 1<<7, 1<<20);
+	rwlock_test(1<<7, 1<<14, 1<<7, 1<<14);
 	ct_add_line(info, "%-*g%-*g\n", FIELD_WIDTH,
 		    ct_wall_clock_time(), FIELD_WIDTH, ct_cpu_time());
 
 	/* x readers, 1 writers */
-	rwlock_test(1<<7, 1<<20, 1<<0, 1<<20);
+	rwlock_test(1<<7, 1<<14, 1<<0, 1<<14);
 	ct_add_line(info, "%-*g%-*g\n", FIELD_WIDTH,
 		    ct_wall_clock_time(), FIELD_WIDTH, ct_cpu_time());
 
 	/* x readers, no writers */
-	rwlock_test(1<<7, 1<<20, 0, 1<<20);
+	rwlock_test(1<<7, 1<<14, 0, 1<<14);
 	ct_add_line(info, "%-*g%-*g\n", FIELD_WIDTH,
 		    ct_wall_clock_time(), FIELD_WIDTH, ct_cpu_time());
 
