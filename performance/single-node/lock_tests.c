@@ -54,9 +54,6 @@ static pthread_barrier_t barrier;
 static pthread_t *writers, *readers;
 static lock_t lock;
 
-/* dummy write/read var. */
-static volatile int np;
-
 /*******************************************************************************
  * Begin test functions
  ******************************************************************************/
@@ -71,9 +68,7 @@ void *reader(void *arg)
 
 	for (i = 0; i < nreads; i++) {
 		rlock_acquire(&lock);
-		p = np;
-		assert(p == np);
-		while (++tmp % 128);
+		while (++tmp % 64);
 		release(&lock);
 	}
 
@@ -83,12 +78,15 @@ void *reader(void *arg)
 void *writer(void *arg)
 {
 	unsigned nwrites = *(unsigned *) arg, i;
+	volatile int tmp = 0;
+
 	pthread_barrier_wait(&barrier);
 	ct_start_clock();
 
+
 	for (i = 0; i < nwrites; i++) {
 		rwlock_acquire(&lock);
-		while (++np % 128);
+		while (++tmp % 128);
 		release(&lock);
 	}
 
