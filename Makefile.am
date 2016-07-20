@@ -9,8 +9,8 @@ bin_PROGRAMS = \
 	performance/multi-node/rdm_one_sided \
 	performance/single-node/lock_tests
 
-# dist_bin_SCRIPTS = \
-#	scripts/run_craytests.sh
+dist_bin_SCRIPTS = \
+	scripts/run_cray_tests.py
 
 noinst_LTLIBRARIES = libcraytests.la
 libcraytests_la_SOURCES = \
@@ -62,4 +62,4 @@ endif
 endif
 
 # test:
-#	./scripts/run_craytests.sh
+#	./scripts/run_cray_tests.py
