@@ -2,8 +2,6 @@ AM_CFLAGS = -I$(srcdir)/include
 ACLOCAL_AMFLAGS = -I config
 
 bin_PROGRAMS = \
-	performance/multi-node/rdm_bw \
-	performance/multi-node/rdm_latency \
 	performance/multi-node/rdm_mbw_mr \
 	performance/multi-node/rdm_pingpong \
 	performance/multi-node/rdm_one_sided \
@@ -20,14 +18,6 @@ libcraytests_la_SOURCES = \
 ################################################################################
 # Multi-node sources
 ################################################################################
-performance_multi_node_rdm_bw_SOURCES = \
-	performance/multi-node/rdm_bw.c
-performance_multi_node_rdm_bw_LDADD = libcraytests.la
-
-performance_multi_node_rdm_latency_SOURCES = \
-	performance/multi-node/rdm_latency.c
-performance_multi_node_rdm_latency_LDADD = libcraytests.la
-
 performance_multi_node_rdm_mbw_mr_SOURCES = \
 	performance/multi-node/rdm_mbw_mr.c
 performance_multi_node_rdm_mbw_mr_LDADD = libcraytests.la
