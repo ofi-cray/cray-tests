@@ -428,7 +428,7 @@ double calc_bw(int rank, int num_pairs, int window_size, struct iovec *s_iov,
 				}
 			}
 
-			wait_for_comp(scq, type == 0 ? window_size * iov_cnt : window_size);
+			wait_for_comp(scq, type == SEND_RECV ? window_size * iov_cnt : window_size);
 			fi_rc = fi_recv(ep, r_fin, 4, NULL,
 					fi_addrs[target], NULL);
 			assert(!fi_rc);
