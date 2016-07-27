@@ -38,6 +38,7 @@
 #include <assert.h>
 #include <sys/time.h>
 #include <string.h>
+#include <sys/uio.h>
 
 #include <rdma/fabric.h>
 #include <rdma/fi_domain.h>
@@ -50,6 +51,8 @@
 
 #define DEFAULT_WINDOW       (64)
 
+#define IOV_CNT		     8 	/* Note this is hard coded to the current gni
+				 * max iov limit */
 #define ITERS_SMALL          (100)
 #define WARMUP_ITERS_SMALL   (10)
 #define ITERS_LARGE          (20)
@@ -61,10 +64,13 @@
 
 #define MAX_MSG_SIZE         (1<<22)
 #define MAX_ALIGNMENT        (65536)
-#define MY_BUF_SIZE (MAX_MSG_SIZE + MAX_ALIGNMENT)
 
 #define TEST_DESC "Libfabric Multiple Bandwidth and Message Rate Test"
 #define HEADER "# " TEST_DESC " \n"
+#define SEND_RECV_DESC   "# fi_send  -> fi_recv\n"
+#define SENDV_RECV_DESC  "# fi_sendv -> fi_recv  (Scatter/Gather)\n"
+#define SEND_RECVV_DESC  "# fi_send  -> fi_recvv (Scatter)\n"
+#define SENDV_RECVV_DESC "# fi_sendv -> fi_recvv (Scatter/Scatter)\n"
 #ifndef FIELD_WIDTH
 #   define FIELD_WIDTH 20
 #endif
@@ -72,12 +78,13 @@
 #   define FLOAT_PRECISION 2
 #endif
 
+enum send_recv_type_e {
+	SEND_RECV, SENDV_RECVV, SEND_RECVV, SENDV_RECV, FIN
+};
+
 int loop = 100;
 int window_size = 64;
 int skip = 10;
-
-char s_buf_original[MY_BUF_SIZE];
-char r_buf_original[MY_BUF_SIZE];
 
 static int rx_depth = 512;
 
@@ -336,23 +343,43 @@ static int init_av(void)
 	return 0;
 }
 
-double calc_bw(int rank, int size, int num_pairs, int window_size, char *s_buf,
-		char *r_buf)
+double calc_bw(int rank, int num_pairs, int window_size, struct iovec *s_iov,
+	       struct iovec *r_iov, int iov_cnt, char *s_buf, int s_buf_len,
+	       char *r_buf, int r_buf_len, enum send_recv_type_e type)
 {
 	uint64_t t_start = 0, t_end = 0, t = 0, maxtime = 0, *ts;
 	double bw = 0;
-	int i, j, target;
+	int c, i, j, target;
 	int loop, skip;
+	size_t cum_size = 0;
 	int mult = (DEFAULT_WINDOW / window_size) > 0 ? (DEFAULT_WINDOW /
 			window_size) : 1;
 	int __attribute__((unused)) fi_rc;
+	char r_fin[4] = {'b', 'b', 'b', 'b'};
+	char s_fin[4] = {'a', 'a', 'a', 'a'};
 
-	for (i = 0; i < size; i++) {
-		s_buf[i] = 'a';
-		r_buf[i] = 'b';
+	for (c = 0; c < iov_cnt; c++) {
+		for (i = 0; i < s_iov[c].iov_len; i++) {
+			((char *) s_iov[c].iov_base)[i] = 'a';
+		}
+
+		for (i = 0; i < r_iov[c].iov_len; i++) {
+			((char *) r_iov[c].iov_base)[i] = 'b';
+		}
+
+		/* Size will be all the receiver can hold */
+		cum_size += r_iov[c].iov_len;
 	}
 
-	if (size > LARGE_THRESHOLD) {
+	for (c = 0; c < s_buf_len; c++) {
+		s_buf[c]= 'a';
+	}
+
+	for (c = 0; c < r_buf_len; c++) {
+		r_buf[c]= 'b';
+	}
+
+	if (cum_size > LARGE_THRESHOLD) {
 		loop = ITERS_LARGE * mult;
 		skip = WARMUP_ITERS_LARGE * mult;
 	} else {
@@ -372,14 +399,37 @@ double calc_bw(int rank, int size, int num_pairs, int window_size, char *s_buf,
 			}
 
 			for (j = 0; j < window_size; j++) {
-				fi_rc = fi_send(ep, s_buf, size, NULL,
-						fi_addrs[target],
-						NULL);
-				assert(!fi_rc);
+				switch (type) {
+				case SEND_RECV:
+					for (c = 0; c < iov_cnt; c++) {
+						fi_rc = fi_send(ep, s_iov[c].iov_base,
+								s_iov[c].iov_len, NULL,
+								fi_addrs[target],
+								NULL);
+						assert(!fi_rc);
+					}
+					break;
+				case SENDV_RECVV:
+				case SENDV_RECV:
+					fi_rc = fi_sendv(ep, s_iov, (void **) NULL,
+							 iov_cnt, fi_addrs[target],
+							 NULL);
+					assert(!fi_rc);
+					break;
+				case SEND_RECVV:
+					fi_rc = fi_send(ep, s_buf,
+							s_buf_len, NULL,
+							fi_addrs[target],
+							NULL);
+					assert(!fi_rc);
+					break;
+				default:
+					abort();
+				}
 			}
 
-			wait_for_comp(scq, window_size);
-			fi_rc = fi_recv(ep, r_buf, 4, NULL,
+			wait_for_comp(scq, type == SEND_RECV ? window_size * iov_cnt : window_size);
+			fi_rc = fi_recv(ep, r_fin, 4, NULL,
 					fi_addrs[target], NULL);
 			assert(!fi_rc);
 			wait_for_comp(rcq, 1);
@@ -396,13 +446,37 @@ double calc_bw(int rank, int size, int num_pairs, int window_size, char *s_buf,
 			}
 
 			for (j = 0; j < window_size; j++) {
-				fi_rc = fi_recv(ep, r_buf, size, NULL,
-						fi_addrs[target], NULL);
-				assert(!fi_rc);
+				switch (type) {
+				case SEND_RECV:
+					for (c = 0; c < iov_cnt; c++) {
+						fi_rc = fi_recv(ep, r_iov[c].iov_base,
+								r_iov[c].iov_len, NULL,
+								fi_addrs[target],
+								NULL);
+						assert(!fi_rc);
+					}
+					break;
+				case SENDV_RECVV:
+				case SEND_RECVV:
+
+					fi_rc = fi_recvv(ep, r_iov, (void **) NULL, iov_cnt,
+							 fi_addrs[target], NULL);
+					assert(!fi_rc);
+					break;
+				case SENDV_RECV:
+					fi_rc = fi_recv(ep, r_buf,
+							r_buf_len, NULL,
+							fi_addrs[target],
+							NULL);
+					assert(!fi_rc);
+					break;
+				default:
+					abort();
+				}
 			}
 
-			wait_for_comp(rcq, window_size);
-			fi_rc = fi_send(ep, s_buf, 4, NULL,
+			wait_for_comp(rcq, type == 0 ? window_size * iov_cnt : window_size);
+			fi_rc = fi_send(ep, s_fin, 4, NULL,
 					fi_addrs[target], NULL);
 			assert(!fi_rc);
 			wait_for_comp(scq, 1);
@@ -424,7 +498,7 @@ double calc_bw(int rank, int size, int num_pairs, int window_size, char *s_buf,
 	free(ts);
 
 	if (rank == 0) {
-		double tmp = num_pairs * size / 1e6;
+		double tmp = num_pairs * cum_size / 1e6;
 
 		tmp = tmp * loop * window_size;
 		bw = tmp / (maxtime / 1e6);
@@ -435,17 +509,18 @@ double calc_bw(int rank, int size, int num_pairs, int window_size, char *s_buf,
 	return 0;
 }
 
-
 int main(int argc, char *argv[])
 {
 	int op, ret;
 
+	struct iovec s_iov[IOV_CNT], r_iov[IOV_CNT];
 	char *s_buf, *r_buf;
 	int align_size;
 	int pairs, print_rate;
 	int window_varied;
-	int c;
+	int c, j;
 	int curr_size;
+	enum send_recv_type_e type;
 
 	ctpm_Init(&argc, &argv);
 	ctpm_Rank(&myid);
@@ -519,128 +594,169 @@ int main(int argc, char *argv[])
 	align_size = getpagesize();
 	assert(align_size <= MAX_ALIGNMENT);
 
-	s_buf = (char *) (((unsigned long) s_buf_original + (align_size - 1)) /
-				align_size * align_size);
-	r_buf = (char *) (((unsigned long) r_buf_original + (align_size - 1)) /
-				align_size * align_size);
-
-	if (!myid) {
-		fprintf(stdout, HEADER);
-		if (window_varied) {
-			fprintf(stdout, "# [ pairs: %d ] [ window size: varied ]\n", pairs);
-			fprintf(stdout, "\n# Uni-directional Bandwidth (MB/sec)\n");
-		} else {
-			fprintf(stdout, "# [ pairs: %d ] [ window size: %d ]\n", pairs,
-					window_size);
-			if (print_rate) {
-				fprintf(stdout, "%-*s%*s%*s\n", 10, "# Size", FIELD_WIDTH,
-						"MB/s", FIELD_WIDTH, "Messages/s");
-			} else {
-				fprintf(stdout, "%-*s%*s\n", 10, "# Size", FIELD_WIDTH, "MB/s");
-			}
-		}
-		fflush(stdout);
+	/* Allocate page aligned buffers */
+	for (c = 0; c < IOV_CNT; c++) {
+		assert(!posix_memalign(&s_iov[c].iov_base, align_size, MAX_MSG_SIZE));
+		assert(!posix_memalign(&r_iov[c].iov_base, align_size, MAX_MSG_SIZE));
 	}
 
-	if (window_varied) {
-		int window_array[] = WINDOW_SIZES;
-		double **bandwidth_results;
-		int log_val = 1, tmp_message_size = MAX_MSG_SIZE;
-		int i, j;
+	assert(!posix_memalign((void **)&s_buf, align_size, MAX_MSG_SIZE * IOV_CNT));
+	assert(!posix_memalign((void **)&r_buf, align_size, MAX_MSG_SIZE * IOV_CNT));
 
-		for (i = 0; i < WINDOW_SIZES_COUNT; i++) {
-			if (window_array[i] > window_size) {
-				window_size = window_array[i];
-			}
-		}
-
-		while (tmp_message_size >>= 1) {
-			log_val++;
-		}
-
-		bandwidth_results = (double **)malloc(sizeof(double *) * log_val);
-
-		for (i = 0; i < log_val; i++) {
-			bandwidth_results[i] = (double *)malloc(sizeof(double) *
-					WINDOW_SIZES_COUNT);
-		}
-
+	for (type = 0; type < FIN; type++) {
 		if (!myid) {
-			fprintf(stdout, "#      ");
-
-			for (i = 0; i < WINDOW_SIZES_COUNT; i++) {
-				fprintf(stdout, "  %10d", window_array[i]);
+			fprintf(stdout, HEADER);
+			switch (type) {
+			case SEND_RECV:
+				fprintf(stdout, SEND_RECV_DESC);
+				break;
+			case SENDV_RECVV:
+				fprintf(stdout, SENDV_RECVV_DESC);
+				break;
+			case SEND_RECVV:
+				fprintf(stdout, SEND_RECVV_DESC);
+				break;
+			case SENDV_RECV:
+				fprintf(stdout, SENDV_RECV_DESC);
+				break;
+			default:
+				abort();
 			}
 
-			fprintf(stdout, "\n");
+			if (window_varied) {
+				fprintf(stdout, "# [ pairs: %d ] [ window size: varied ]\n", pairs);
+				fprintf(stdout, "\n# Uni-directional Bandwidth (MB/sec)\n");
+			} else {
+				fprintf(stdout, "# [ pairs: %d ] [ window size: %d ]\n", pairs,
+					window_size);
+				if (print_rate) {
+					fprintf(stdout, "%-*s%*s%*s%*s\n", 10, "# Size", FIELD_WIDTH,
+						"Iov count", FIELD_WIDTH, "MB/s", FIELD_WIDTH, "Messages/s");
+				} else {
+					fprintf(stdout, "%-*s%*s%*s\n", 10, "# Size", FIELD_WIDTH,
+						"Iov count", FIELD_WIDTH, "MB/s");
+				}
+			}
 			fflush(stdout);
 		}
 
-		for (j = 0, curr_size = 1; curr_size <= MAX_MSG_SIZE; curr_size *= 2, j++) {
-			if (!myid) {
-				fprintf(stdout, "%-7d", curr_size);
-			}
+		if (window_varied) {
+			int window_array[] = WINDOW_SIZES;
+			double **bandwidth_results;
+			int log_val = 1, tmp_message_size = MAX_MSG_SIZE;
+			int i, j;
 
 			for (i = 0; i < WINDOW_SIZES_COUNT; i++) {
-				bandwidth_results[j][i] = calc_bw(myid, curr_size, pairs,
-						window_array[i], s_buf, r_buf);
-
-				if (!myid) {
-					fprintf(stdout, "  %10.*f", FLOAT_PRECISION,
-							bandwidth_results[j][i]);
+				if (window_array[i] > window_size) {
+					window_size = window_array[i];
 				}
 			}
 
+			while (tmp_message_size >>= 1) {
+				log_val++;
+			}
+
+			bandwidth_results = (double **)malloc(sizeof(double *) * log_val);
+
+			for (i = 0; i < log_val; i++) {
+				bandwidth_results[i] = (double *)malloc(sizeof(double) *
+									WINDOW_SIZES_COUNT);
+			}
+
 			if (!myid) {
-				fprintf(stdout, "\n");
-				fflush(stdout);
-			}
-		}
-
-		if (!myid && print_rate) {
-			fprintf(stdout, "\n# Message Rate Profile\n");
-			fprintf(stdout, "#      ");
-
-			for (i = 0; i < WINDOW_SIZES_COUNT; i++) {
-				fprintf(stdout, "  %10d", window_array[i]);
-			}
-
-			fprintf(stdout, "\n");
-			fflush(stdout);
-
-			for (c = 0, curr_size = 1; curr_size <= MAX_MSG_SIZE; curr_size *= 2) {
-				fprintf(stdout, "%-7d", curr_size);
+				fprintf(stdout, "#      ");
 
 				for (i = 0; i < WINDOW_SIZES_COUNT; i++) {
-					double rate = 1e6 * bandwidth_results[c][i] / curr_size;
-
-					fprintf(stdout, "  %10.2f", rate);
+					fprintf(stdout, "  %10d", window_array[i]);
 				}
 
 				fprintf(stdout, "\n");
 				fflush(stdout);
-				c++;
 			}
-		}
-	} else {
-		/* Just one window size */
-		for (curr_size = 1; curr_size <= MAX_MSG_SIZE; curr_size *= 2) {
-			double bw, rate;
 
-			bw = calc_bw(myid, curr_size, pairs, window_size, s_buf, r_buf);
+			for (j = 0, curr_size = 1; curr_size <= MAX_MSG_SIZE; curr_size *= 2, j++) {
+				if (!myid) {
+					fprintf(stdout, "%-7d", curr_size);
+				}
 
-			if (!myid) {
-				rate = 1e6 * bw / curr_size;
+				for (i = 0; i < WINDOW_SIZES_COUNT; i++) {
+					for (c = 0; c < IOV_CNT; c++) {
+						r_iov[c].iov_len = s_iov[c].iov_len = curr_size;
+						bandwidth_results[j][i] = calc_bw(myid, pairs,
+										  window_array[i], s_iov, r_iov, c + 1,
+										  s_buf, (c + 1) * curr_size, r_buf,
+										  (c + 1) * curr_size, type);
 
-				if (print_rate) {
-					fprintf(stdout, "%-*d%*.*f%*.*f\n", 10, curr_size,
-							FIELD_WIDTH, FLOAT_PRECISION, bw, FIELD_WIDTH,
-							FLOAT_PRECISION, rate);
+						if (!myid) {
+							fprintf(stdout, "%*d  %10.*f", FIELD_WIDTH, c + 1,
+								FLOAT_PRECISION,
+								bandwidth_results[j][i]);
+						}
+
+						fprintf(stdout, c == IOV_CNT - 1 ? "\n" : "");
+					}
+				}
+
+				if (!myid) {
+					fprintf(stdout, "\n");
 					fflush(stdout);
-				} else {
-					fprintf(stdout, "%-*d%*.*f\n", 10, curr_size, FIELD_WIDTH,
-							FLOAT_PRECISION, bw);
-					fflush(stdout);
+				}
+			}
+
+			if (!myid && print_rate) {
+				fprintf(stdout, "\n# Message Rate Profile\n");
+				fprintf(stdout, "#      ");
+
+				for (i = 0; i < WINDOW_SIZES_COUNT; i++) {
+					fprintf(stdout, "  %10d", window_array[i]);
+				}
+
+				fprintf(stdout, "\n");
+				fflush(stdout);
+
+				for (c = 0; c < IOV_CNT; c++) {
+					for (j = 0, curr_size = 1; curr_size <= MAX_MSG_SIZE; curr_size *= 2) {
+						fprintf(stdout, "%-7d,%*d", curr_size * (c + 1), FIELD_WIDTH, c + 1);
+
+						for (i = 0; i < WINDOW_SIZES_COUNT; i++) {
+							double rate = 1e6 * bandwidth_results[j][i] / (curr_size * (c + 1));
+
+							fprintf(stdout, "  %10.2f", rate);
+						}
+
+						fprintf(stdout, "\n");
+						fflush(stdout);
+						j++;
+					}
+				}
+			}
+		} else {
+			/* Just one window size */
+			for (curr_size = 1; curr_size <= MAX_MSG_SIZE; curr_size *= 2) {
+				double bw, rate;
+
+				for (c = 0; c < IOV_CNT; c++) {
+					r_iov[c].iov_len = s_iov[c].iov_len = curr_size;
+					bw = calc_bw(myid, pairs, window_size, s_iov, r_iov, c + 1,
+						     s_buf, (c + 1) * curr_size, r_buf,
+						     (c + 1) * curr_size, type);
+
+					if (!myid) {
+						rate = 1e6 * bw / (curr_size * (c + 1));
+
+						if (print_rate) {
+							fprintf(stdout, "%-*d%*d%*.*f%*.*f\n", 10, curr_size * (c + 1),
+								FIELD_WIDTH, c + 1, FIELD_WIDTH,
+								FLOAT_PRECISION, bw, FIELD_WIDTH,
+								FLOAT_PRECISION, rate);
+							fflush(stdout);
+						} else {
+							fprintf(stdout, "%-*d%*d%*.*f\n", 10, curr_size * (c + 1), FIELD_WIDTH,
+								FIELD_WIDTH, c + 1, FLOAT_PRECISION, bw);
+							fflush(stdout);
+						}
+					}
+					fprintf(stdout, c == IOV_CNT - 1 ? "\n" : "");
 				}
 			}
 		}
@@ -659,8 +775,13 @@ int main(int argc, char *argv[])
 
 	ctpm_Barrier();
 	ctpm_Finalize();
+
+	for (c = 0; c < IOV_CNT; c++) {
+		free(r_iov[c].iov_base);
+		free(s_iov[c].iov_base);
+	}
+
 	return 0;
 }
 
 /* vi:set sw=8 sts=8 */
-
