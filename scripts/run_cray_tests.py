@@ -55,7 +55,7 @@ testlist = [ ['name=./rdm_pingpong', 'nnodes=2', 'args=-t1'],
              ['name=./rdm_one_sided', 'nnodes=2', 'args=-t8'],
              ['name=./rdm_one_sided', 'nnodes=2', 'args=-t16'],
              ['name=./rdm_one_sided', 'nnodes=2', 'args=-t24'],
-             ['name=./rdm_mbw_mr', 'nnodes=2', 'ntasks=2', 'cpu_bind=none']
+             ['name=./rdm_mbw_mr', 'nnodes=2', 'ntasks=2', 'cpu_bind=none', 'timeout=600']
              ]
 
 class craytests:
@@ -223,8 +223,6 @@ def _main():
     parser.add_argument('--launcher', dest='launcher', default=None,
                         choices=['aprun', 'srun', None],
                         help='Launcher mechnism')
-    parser.add_argument('-t', '--timeout', dest='timeout', action='store',
-                        type=int, default=ct_default_timeout, help='timeout')
     parser.add_argument('--nodelist', dest='nodelist', default=None,
                         help='List of nodes to execute on')
     parser.add_argument('--cpu_bind', dest='cpu_bind', default=None,
@@ -235,10 +233,10 @@ def _main():
     args = parser.parse_args()
 
     launcher = args.launcher
-    timeout = args.timeout
     nodelist = args.nodelist
     cpu_bind = args.cpu_bind
     max_jobs = args.jobs
+    timeout = ct_default_timeout
 
     ctlist = list()
     for tparams in testlist:
@@ -263,7 +261,7 @@ def _main():
             elif param == 'nthreads':
                 tnthreads = val
             elif param == 'timeout':
-                ttimeout = val
+                ttimeout = int(val)
             elif param == 'nodelist':
                 tnodelist = val
             elif param == 'cpu_bind':
