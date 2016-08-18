@@ -41,6 +41,29 @@ static char clock_started, is_clock_lock_init;
 #define CT_FIVERSION FI_VERSION(1,3)
 #endif
 
+/* Branch predictor hints */
+#define likely(x)       __builtin_expect(!!(x), 1)
+#define unlikely(x)     __builtin_expect(!!(x), 0)
+
+/*  Expand macro argument "something" to a string literal. */
+#define STRINGIFY_HELPER(something)  #something
+#define STRINGIFY(something)         STRINGIFY_HELPER(something)
+
+/* Min and max */
+#ifndef MIN
+#define MIN(x, y)	(((x) < (y))?(x):(y))
+#endif
+#ifndef MAX
+#define MAX(x, y)	(((x) > (y))?(x):(y))
+#endif
+
+#ifndef FLOOR
+#define FLOOR(a,b)      ((a) - ((a)%(b)))
+#endif
+#ifndef CEILING
+#define CEILING(a,b)    ((a) <= 0 ? 0 :  (FLOOR((a)-1,b) + (b)))
+#endif
+
 #include "rdma/fi_errno.h"
 #include "rdma/fabric.h"
 
@@ -72,6 +95,21 @@ static inline uint64_t get_time_usec(void)
 	usecs = (tv.tv_sec * 1000000) + tv.tv_usec;
 	return usecs;
 }
+
+static inline uint64_t get_time_nsec(void)
+{
+#ifdef CLOCK_MONOTONIC
+	struct timespec tp;
+	uint64_t nsecs;
+
+	clock_gettime(CLOCK_MONOTONIC, &tp);
+	nsecs = (tp.tv_sec * 1000000000) + tp.tv_nsec;
+	return nsecs;
+#else
+	return get_time_usec() * 1000;
+#endif
+}
+
 
 /* thread safe clock start and clock stop */
 static inline void ct_start_clock()
