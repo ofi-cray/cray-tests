@@ -58,8 +58,14 @@ AM_CFLAGS += -lpmi
 if HAVE_CRAY_PMI
 AM_CFLAGS += -DCRAY_PMI_COLL
 endif
-
 endif
 
+if HAVE_PROFILE
+AM_CFLAGS += -lprofiler
+
+if HAVE_CPUPROFILE
+AM_CFLAGS += -DCPUPROFILE_ENABLED
+endif
+endif
 # test:
 #	./scripts/run_craytests.sh

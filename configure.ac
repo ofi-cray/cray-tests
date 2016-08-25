@@ -46,6 +46,19 @@ AC_CHECK_LIB([pmi], [PMI_Allgather],
 	     AM_CONDITIONAL([HAVE_CRAY_PMI], [true]),
 	     AM_CONDITIONAL([HAVE_CRAY_PMI], [false]))
 
+AC_ARG_WITH([profiler],
+            AC_HELP_STRING([--with-profiler], [Specify libprofiler location - default NO]),
+            [AS_IF([test -d $withval/lib64], [profiler_libdir="lib64"], [profiler_libdir="lib"])
+             CPPFLAGS="-I $withval/include $CPPFLAGS"
+             LDFLAGS="-L$withval/$profiler_libdir $LDFLAGS"
+             AM_CONDITIONAL([HAVE_PROFILE], [true])],
+            [AM_CONDITIONAL([HAVE_PROFILE], [false])])
+
+AC_CHECK_LIB([profiler], [ProfilerStart],
+	     AM_CONDITIONAL([HAVE_CPUPROFILE], [true]),
+	     AM_CONDITIONAL([HAVE_CPUPROFILE], [false]))
+
+
 dnl Checks for libraries
 AC_CHECK_LIB([fabric], fi_getinfo, [],
     AC_MSG_ERROR([fi_getinfo() not found.  cray-tests requires libfabric.]))
