@@ -55,7 +55,8 @@ testlist = [ ['name=./rdm_pingpong', 'nnodes=2', 'args=-t1'],
              ['name=./rdm_one_sided', 'nnodes=2', 'args=-t8'],
              ['name=./rdm_one_sided', 'nnodes=2', 'args=-t16'],
              ['name=./rdm_one_sided', 'nnodes=2', 'args=-t24'],
-             ['name=./rdm_mbw_mr', 'nnodes=2', 'ntasks=2', 'cpu_bind=none', 'timeout=600']
+             ['name=./rdm_mbw_mr', 'nnodes=2', 'ntasks=2', 'cpu_bind=none', 'timeout=600'],
+             ['name=./random_access', 'nnodes=2', 'ntasks=2', 'cpu_bind=none']
              ]
 
 class craytests:
