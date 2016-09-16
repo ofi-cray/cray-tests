@@ -86,6 +86,25 @@ void ct_parseinfo(int op, char *optarg, struct fi_info *hints);
 #include <time.h>
 #include <stdint.h>
 
+/* Branch predictor hints */
+#define likely(x)       __builtin_expect(!!(x), 1)
+#define unlikely(x)     __builtin_expect(!!(x), 0)
+
+#ifdef NDEBUG
+#define ASSERT_MSG(cond, fmt, args...) do { } while (0)
+#else
+#include <assert.h>
+#include <stdio.h>
+#define ASSERT_MSG(cond, fmt, args...) \
+	do { \
+		if (unlikely(!(cond))) { \
+			fprintf(stderr, "[%s:%d] " fmt "\n", __func__, __LINE__, ##args); \
+			fflush(stderr); \
+			assert(cond); \
+		} \
+	} while (0)
+#endif
+
 static inline uint64_t get_time_usec(void)
 {
 	struct timeval tv;
