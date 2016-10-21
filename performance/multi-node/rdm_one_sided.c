@@ -143,6 +143,7 @@ void print_usage(void)
 		ct_print_opts_usage("-l <loops>", "number of loops to measure");
 		ct_print_opts_usage("-s <skip>", "number of loops to skip");
 		ct_print_opts_usage("-i <iterations>", "iterations per loop");
+		ct_print_std_usage();
 	}
 }
 
@@ -552,11 +553,16 @@ int main(int argc, char *argv[])
 	ctpm_Job_size(&numprocs);
 
 	hints = fi_allocinfo();
-	if (!hints)
+	if (!hints) {
+		perror("malloc failed\n");
 		return -1;
+	}
 
-	while ((op = getopt(argc, argv, "hmt:i:l:s:")) != -1) {
+	while ((op = getopt(argc, argv, "hmt:i:l:s:" CT_STD_OPTS)) != -1) {
 		switch (op) {
+		default:
+			ct_parse_std_opts(op, optarg, hints);
+			break;
 		case 'l':  // loops
 			loop = atoi(optarg);
 			if (loop <= 0) {
@@ -728,7 +734,6 @@ int main(int argc, char *argv[])
 	for (i = 0; i < tunables.threads; i++) {
 		fini_per_thread_data(&thread_data[i]);
 	}
-
 
 	/* end of threaded section */
 	fi_close(&dom->fid);

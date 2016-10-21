@@ -60,11 +60,12 @@ testlist = [ ['name=./rdm_pingpong', 'nnodes=2', 'args=-t1'],
              ]
 
 class craytests:
-    def __init__(self, _name, _args, _timeout,
+    def __init__(self, _name, _args, _provider, _timeout,
                  _nnodes, _ntasks, _nthreads, _launcher=None,
                  _nodelist=None, _cpu_bind=None):
         self.name = _name
         self.args = _args
+        self.provider = _provider
         self.nnodes = _nnodes
         self.ntasks = _ntasks
         self.nthreads = _nthreads
@@ -80,6 +81,10 @@ class craytests:
             s += '\targs: '+self.args+'\n'
         else:
             s += '\targs: None\n'
+        if self.provider != None:
+            s += '\tprovider: '+self.provider+'\n'
+        else:
+            s += '\tprovider: default\n'
         s += '\tnnodes: '+self.nnodes+'\n'
         s += '\tntask: '+self.ntasks+'\n'
         s += '\tnthreads: '+self.nthreads+'\n'
@@ -120,6 +125,8 @@ class craytests:
             if self.nodelist != None:
                 cmd += [ '-L'+self.nodelist ]
         cmd += [self.name]
+        if self.provider != None:
+            cmd += [ '-p'+self.provider.strip() ]
         if self.args != None:
             cmd += self.args.split()
 
@@ -221,13 +228,15 @@ ct_default_timeout = 60
 def _main():
     parser = argparse.ArgumentParser(description='Run the Cray test suite.',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('--launcher', dest='launcher', default=None,
+    parser.add_argument('-l', '--launcher', dest='launcher', default=None,
                         choices=['aprun', 'srun', None],
                         help='Launcher mechnism')
     parser.add_argument('--nodelist', dest='nodelist', default=None,
                         help='List of nodes to execute on')
     parser.add_argument('--cpu_bind', dest='cpu_bind', default=None,
                         help='CPU binding option')
+    parser.add_argument('-p', '--provider', dest='provider', default=None,
+                        help='provider (e.g., gni)')
     parser.add_argument('-j', '--jobs', dest='jobs', action='store', type=int,
                         default=1, help='Number of jobs to run simultaneously')
 
@@ -236,6 +245,7 @@ def _main():
     launcher = args.launcher
     nodelist = args.nodelist
     cpu_bind = args.cpu_bind
+    provider = args.provider
     max_jobs = args.jobs
     timeout = ct_default_timeout
 
@@ -249,6 +259,7 @@ def _main():
         ttimeout = timeout
         tnodelist = nodelist
         tcpu_bind = cpu_bind
+        tprovider = provider
         for p in tparams:
             (param, val) = p.split('=')
             if param == 'name':
@@ -263,6 +274,8 @@ def _main():
                 tnthreads = val
             elif param == 'timeout':
                 ttimeout = int(val)
+            elif param == 'provider':
+                tprovider = val
             elif param == 'nodelist':
                 tnodelist = val
             elif param == 'cpu_bind':
@@ -273,7 +286,7 @@ def _main():
             sys.stdout.write('Skipping unnamed test configuration\n')
             continue
 
-        ct = craytests(tname, targs, ttimeout, tnnodes, tntasks, tnthreads, launcher, tnodelist, tcpu_bind)
+        ct = craytests(tname, targs, tprovider, ttimeout, tnnodes, tntasks, tnthreads, launcher, tnodelist, tcpu_bind)
         if ct == None:
             sys.stdout.write('Failed to create test \'%s\'\n'%(t[0]))
             return -1

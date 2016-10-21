@@ -125,6 +125,7 @@ void print_usage(void)
 
 		ct_print_opts_usage("-l <loops>", "number of loops to measure");
 		ct_print_opts_usage("-s <skip>", "number of loops to skip");
+		ct_print_std_usage();
 	}
 }
 
@@ -503,8 +504,11 @@ int main(int argc, char *argv[])
 	if (!hints)
 		return -1;
 
-	while ((op = getopt(argc, argv, "hl:ms:t:")) != -1) {
+	while ((op = getopt(argc, argv, "hl:ms:t:" CT_STD_OPTS)) != -1) {
 		switch (op) {
+		default:
+			ct_parse_std_opts(op, optarg, hints);
+			break;
                 case 'l':  // loops
                         loop = atoi(optarg);
                         if (loop <= 0) {
