@@ -115,7 +115,7 @@ void print_usage(void)
 				    "acknowldgement (64, 10) [cannot be used with -v]");
 		ct_print_opts_usage("-v", "Vary the window size (default no) "
 				    "[cannot be used with -w]");
-		ct_print_opts_usage("-h", "Print this help");
+		ct_print_std_usage();
 	}
 }
 
@@ -536,8 +536,11 @@ int main(int argc, char *argv[])
 	if (!hints)
 		return -1;
 
-	while ((op = getopt(argc, argv, "hp:w:vr:")) != -1) {
+	while ((op = getopt(argc, argv, "hp:w:vr:" CT_STD_OPTS)) != -1) {
 		switch (op) {
+		default:
+			ct_parse_std_opts(op, optarg, hints);
+			break;
 		case 'p':
 			pairs = atoi(optarg);
 			if (pairs > (numprocs / 2)) {

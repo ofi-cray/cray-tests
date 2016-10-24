@@ -426,6 +426,7 @@ static inline void print_usage(void)
 		ct_print_opts_usage("-h", "display this help message");
 		ct_print_opts_usage("-m", "memory in bytes per PE");
 		ct_print_opts_usage("-n", "number of updates per PE");
+    ct_print_std_usage();
 	}
 }
 
@@ -1009,8 +1010,11 @@ int main(int argc, char **argv)
 
 	hints = prov.hints;
 
-	while ((op = getopt(argc, argv, "hm:n:")) != -1) {
+	while ((op = getopt(argc, argv, "hm:n:" CT_STD_OPTS)) != -1) {
 		switch(op) {
+		default:
+			ct_parse_std_opts(op, optarg, hints);
+			break;
 		/*
 		 * memory per PE (used for determining table size)
 		 */
