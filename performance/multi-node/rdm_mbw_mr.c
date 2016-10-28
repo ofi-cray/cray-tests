@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015-2016 Cray Inc.  All rights reserved.
+ * Copyright (c) 2015-2017 Cray Inc.  All rights reserved.
  * Copyright (c) 2015 Los Alamos National Security, LLC. All rights reserved.
  *
  * This software is available to you under a choice of one of two
@@ -82,18 +82,26 @@ enum send_recv_type_e {
 	SEND_RECV, SENDV_RECVV, SEND_RECVV, SENDV_RECV, FIN
 };
 
+enum test_type_e {
+	CQ_TEST, CNTR_TEST
+};
+
 int loop = 100;
 int window_size = 64;
 int skip = 10;
+int wait_type = FI_WAIT_NONE;
+int test_type = CQ_TEST;
 
 static int rx_depth = 512;
 
 struct fi_info *fi, *hints;
 struct fid_fabric *fab;
 struct fid_domain *dom;
+struct fid_wait *waitset;
 struct fid_ep *ep;
 struct fid_av *av;
 struct fid_cq *rcq, *scq;
+struct fid_cntr *rcntr, *scntr;
 struct fid_mr *mr;
 struct fi_context fi_ctx_send;
 struct fi_context fi_ctx_recv;
@@ -110,11 +118,17 @@ void print_usage(void)
 		fprintf(stderr, "\n%s\n", TEST_DESC);
 		fprintf(stderr, "\nOptions:\n");
 		ct_print_opts_usage("-r <0,1> ", "Print uni-directional message rate (default 1)");
-		ct_print_opts_usage("-p <pairs>", "Number of pairs involved (default np / 2)");
+		ct_print_opts_usage("-x <pairs>", "Number of pairs involved"
+				    " (default np / 2)");
 		ct_print_opts_usage("-w <window>", "Number of messages sent before "
 				    "acknowldgement (64, 10) [cannot be used with -v]");
 		ct_print_opts_usage("-v", "Vary the window size (default no) "
 				    "[cannot be used with -w]");
+		ct_print_opts_usage("-m", "Wait type to use with CQ's or CNTRS "
+				    "default is 0 = FI_WAIT_NONE, 1 = FI_WAIT_UNSPEC, "
+				    "2 = FI_WAIT_SET");
+		ct_print_opts_usage("-c", "CQ completions or CNTR Completions "
+				    "default 0 = CQ, 1 = CNTR");
 		ct_print_std_usage();
 	}
 }
@@ -122,8 +136,15 @@ void print_usage(void)
 static void free_ep_res(void)
 {
 	fi_close(&av->fid);
-	fi_close(&rcq->fid);
-	fi_close(&scq->fid);
+	if (test_type == CQ_TEST) {
+		fi_close(&rcq->fid);
+		fi_close(&scq->fid);
+	}
+
+	if (test_type == CNTR_TEST) {
+		fi_close(&rcntr->fid);
+		fi_close(&scntr->fid);
+	}
 }
 
 static void cq_readerr(struct fid_cq *cq, const char *cq_str)
@@ -148,52 +169,118 @@ static void cq_readerr(struct fid_cq *cq, const char *cq_str)
 /*
  * fi_cq_err_entry can be cast to any CQ entry format.
  */
-static int wait_for_comp(struct fid_cq *cq, int num_completions)
+static int wait_for_comp(struct fid_cntr *cntr, struct fid_cq *cq,
+			 int num_completions)
 {
 	struct fi_cq_err_entry comp;
 	int ret;
 
-	while (num_completions > 0) {
-		ret = fi_cq_read(cq, &comp, 1);
-		if (ret > 0) {
-			num_completions--;
-		} else if (ret < 0 && ret != -FI_EAGAIN) {
-			if (ret == -FI_EAVAIL) {
-				cq_readerr(cq, "cq");
-			} else {
-				ct_print_fi_error("fi_cq_read", ret);
+	while (1) {
+		ret = 0;
+		if (test_type == CQ_TEST) {
+			if (num_completions <= 0)
+				return 0;
+
+			if (wait_type == FI_WAIT_UNSPEC)
+				ret = fi_cq_sread(cq, &comp, 1, NULL, -1);
+			else
+				ret = fi_cq_read(cq, &comp, 1);
+			if (ret > 0) {
+				num_completions--;
+				continue;
+			} else if (ret < 0 && ret != -FI_EAGAIN) {
+				if (ret == -FI_EAVAIL) {
+					cq_readerr(cq, "cq");
+				} else {
+					ct_print_fi_error("fi_cq_read", ret);
+				}
+				return ret;
 			}
+		}
+
+		if (test_type == CNTR_TEST) {
+			if (fi_cntr_read(cntr) >= num_completions) {
+				return 0;
+			}
+
+			if (wait_type == FI_WAIT_UNSPEC)
+				ret = fi_cntr_wait(cntr, num_completions, -1);
+		}
+
+		if (wait_type == FI_WAIT_SET) {
+			ret = fi_wait(waitset, -1);
+		}
+
+		if (ret < 0 && (wait_type == FI_WAIT_SET ||
+				wait_type == FI_WAIT_UNSPEC)) {
+			fprintf(stdout, "Waiting timed out %d\n", ret);
 			return ret;
 		}
+
 	}
 	return 0;
 }
 
 static int alloc_ep_res(void)
 {
+	struct fi_wait_attr wait_attr;
 	struct fi_cq_attr cq_attr;
 	struct fi_av_attr av_attr;
+	struct fi_cntr_attr cntr_attr;
 	int ret;
 
-	memset(&cq_attr, 0, sizeof(cq_attr));
-	cq_attr.format = FI_CQ_FORMAT_CONTEXT;
-	cq_attr.wait_obj = FI_WAIT_NONE;
-	cq_attr.size = rx_depth;
-
-	/* Open completion queue for send completions */
-	ret = fi_cq_open(dom, &cq_attr, &scq, NULL);
+	memset(&wait_attr, 0, sizeof(wait_attr));
+	wait_attr.wait_obj = FI_WAIT_UNSPEC;
+	ret = fi_wait_open(fab, &wait_attr, &waitset);
 	if (ret) {
-		ct_print_fi_error("fi_cq_open", ret);
+		ct_print_fi_error("fi_wait_open", ret);
 		goto err1;
 	}
 
-	/* Open completion queue for recv completions */
-	ret = fi_cq_open(dom, &cq_attr, &rcq, NULL);
-	if (ret) {
-		ct_print_fi_error("fi_cq_open", ret);
-		goto err2;
+	if (test_type == CQ_TEST) {
+		memset(&cq_attr, 0, sizeof(cq_attr));
+		cq_attr.format = FI_CQ_FORMAT_CONTEXT;
+		cq_attr.wait_obj = wait_type;
+		cq_attr.wait_cond = FI_CQ_COND_NONE;
+		if (wait_type == FI_WAIT_SET)
+			cq_attr.wait_set = waitset;
+		cq_attr.size = rx_depth;
+
+		/* Open completion queue for send completions */
+		ret = fi_cq_open(dom, &cq_attr, &scq, NULL);
+		if (ret) {
+			ct_print_fi_error("fi_cq_open", ret);
+			goto err1;
+		}
+
+		/* Open completion queue for recv completions */
+		ret = fi_cq_open(dom, &cq_attr, &rcq, NULL);
+		if (ret) {
+			ct_print_fi_error("fi_cq_open", ret);
+			goto err2;
+		}
 	}
 
+	if (test_type == CNTR_TEST) {
+		memset(&cntr_attr, 0, sizeof(cntr_attr));
+		cntr_attr.events = FI_CNTR_EVENTS_COMP;
+		if (wait_type == FI_WAIT_SET)
+			cntr_attr.wait_set = waitset;
+		cntr_attr.wait_obj = wait_type;
+		cntr_attr.flags = 0;
+
+		ret = fi_cntr_open(dom, &cntr_attr, &scntr, NULL);
+		if (ret) {
+			ct_print_fi_error("fi_cntr_open", ret);
+			goto err1;
+		}
+
+		ret = fi_cntr_open(dom, &cntr_attr, &rcntr, NULL);
+		if (ret) {
+			ct_print_fi_error("fi_cntr_open", ret);
+			goto err2;
+		}
+	}
 	memset(&av_attr, 0, sizeof(av_attr));
 	av_attr.type = fi->domain_attr->av_type ?
 			fi->domain_attr->av_type : FI_AV_TABLE;
@@ -220,19 +307,34 @@ err1:
 static int bind_ep_res(void)
 {
 	int ret;
+	if (test_type == CQ_TEST) {
+		/* Bind Send CQ with endpoint to collect send completions */
+		ret = fi_ep_bind(ep, &scq->fid, FI_TRANSMIT);
+		if (ret) {
+			ct_print_fi_error("fi_ep_bind", ret);
+			return ret;
+		}
 
-	/* Bind Send CQ with endpoint to collect send completions */
-	ret = fi_ep_bind(ep, &scq->fid, FI_TRANSMIT);
-	if (ret) {
-		ct_print_fi_error("fi_ep_bind", ret);
-		return ret;
+		/* Bind Recv CQ with endpoint to collect recv completions */
+		ret = fi_ep_bind(ep, &rcq->fid, FI_RECV);
+		if (ret) {
+			ct_print_fi_error("fi_ep_bind", ret);
+			return ret;
+		}
 	}
 
-	/* Bind Recv CQ with endpoint to collect recv completions */
-	ret = fi_ep_bind(ep, &rcq->fid, FI_RECV);
-	if (ret) {
-		ct_print_fi_error("fi_ep_bind", ret);
-		return ret;
+	if (test_type == CNTR_TEST) {
+		ret = fi_ep_bind(ep, &scntr->fid, FI_SEND | FI_WRITE);
+		if (ret) {
+			ct_print_fi_error("fi_ep_bind", ret);
+			return ret;
+		}
+
+		ret = fi_ep_bind(ep, &rcntr->fid, FI_RECV);
+		if (ret) {
+			ct_print_fi_error("fi_ep_bind", ret);
+			return ret;
+		}
 	}
 
 	/* Bind AV with the endpoint to map addresses */
@@ -428,11 +530,16 @@ double calc_bw(int rank, int num_pairs, int window_size, struct iovec *s_iov,
 				}
 			}
 
-			wait_for_comp(scq, type == SEND_RECV ? window_size * iov_cnt : window_size);
+			wait_for_comp(scntr, scq, type == SEND_RECV ?
+				      window_size * iov_cnt : window_size);
+			if (test_type == CNTR_TEST)
+				fi_cntr_set(scntr, 0);
 			fi_rc = fi_recv(ep, r_fin, 4, NULL,
 					fi_addrs[target], NULL);
 			assert(!fi_rc);
-			wait_for_comp(rcq, 1);
+			wait_for_comp(rcntr, rcq, 1);
+			if (test_type == CNTR_TEST)
+				fi_cntr_set(rcntr, 0);
 		}
 
 		t_end = get_time_usec();
@@ -475,11 +582,16 @@ double calc_bw(int rank, int num_pairs, int window_size, struct iovec *s_iov,
 				}
 			}
 
-			wait_for_comp(rcq, type == 0 ? window_size * iov_cnt : window_size);
+			wait_for_comp(rcntr, rcq, type == 0 ?
+				      window_size * iov_cnt : window_size);
+			if (test_type == CNTR_TEST)
+				fi_cntr_set(rcntr, 0);
 			fi_rc = fi_send(ep, s_fin, 4, NULL,
 					fi_addrs[target], NULL);
 			assert(!fi_rc);
-			wait_for_comp(scq, 1);
+			wait_for_comp(scntr, scq, 1);
+			if (test_type == CNTR_TEST)
+				fi_cntr_set(scntr, 0);
 		}
 	} else {
 		ctpm_Barrier();
@@ -536,14 +648,30 @@ int main(int argc, char *argv[])
 	if (!hints)
 		return -1;
 
-	while ((op = getopt(argc, argv, "hp:w:vr:" CT_STD_OPTS)) != -1) {
+	while ((op = getopt(argc, argv, "hx:p:w:vr:m:c:" CT_STD_OPTS)) != -1) {
 		switch (op) {
 		default:
 			ct_parse_std_opts(op, optarg, hints);
 			break;
-		case 'p':
+		case 'x':
 			pairs = atoi(optarg);
 			if (pairs > (numprocs / 2)) {
+				print_usage();
+				return EXIT_FAILURE;
+			}
+			break;
+		case 'm':
+			wait_type = atoi(optarg);
+			if (wait_type != FI_WAIT_NONE
+				&& wait_type != FI_WAIT_SET
+				&& wait_type != FI_WAIT_UNSPEC) {
+				print_usage();
+				return EXIT_FAILURE;
+			}
+			break;
+		case 'c':
+			test_type = atoi(optarg);
+			if (test_type != CQ_TEST && test_type != CNTR_TEST) {
 				print_usage();
 				return EXIT_FAILURE;
 			}
@@ -571,6 +699,30 @@ int main(int argc, char *argv[])
 	hints->ep_attr->type	= FI_EP_RDM;
 	hints->caps		= FI_MSG | FI_DIRECTED_RECV;
 	hints->mode		= FI_CONTEXT | FI_LOCAL_MR;
+	hints->domain_attr->control_progress = FI_PROGRESS_AUTO;
+	hints->domain_attr->data_progress = FI_PROGRESS_AUTO;
+	if (myid == 0) {
+		switch (test_type) {
+		case CQ_TEST:
+			fprintf(stderr, "Test will use CQ Completions\n");
+			break;
+		case CNTR_TEST:
+			fprintf(stderr, "Test will use CNTR Completions\n");
+			break;
+		}
+
+		switch (wait_type) {
+		case FI_WAIT_NONE:
+			fprintf(stderr, "WaitObject type is FI_WAIT_NONE\n");
+			break;
+		case FI_WAIT_UNSPEC:
+			fprintf(stderr, "WaitObject type is FI_WAIT_UNSPEC\n");
+			break;
+		case FI_WAIT_SET:
+			fprintf(stderr, "WaitObject type is FI_WAIT_SET\n");
+			break;
+		}
+	}
 
 	if (numprocs < 2) {
 		if (!myid) {
