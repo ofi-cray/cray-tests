@@ -43,31 +43,32 @@ import sys, socket
 import os, select, fcntl, time # for timeout stuff
 from signal import SIGALRM
 
-testlist = [ ['name=./rdm_pingpong', 'nnodes=2', 'args=-t1'],
-             ['name=./rdm_pingpong', 'nnodes=2', 'args=-t2'],
-             ['name=./rdm_pingpong', 'nnodes=2', 'args=-t4'],
-             ['name=./rdm_pingpong', 'nnodes=2', 'args=-t8'],
-             ['name=./rdm_pingpong', 'nnodes=2', 'args=-t16'],
-             ['name=./rdm_pingpong', 'nnodes=2', 'args=-t24'],
-             ['name=./rdm_one_sided', 'nnodes=2', 'args=-t1'],
-             ['name=./rdm_one_sided', 'nnodes=2', 'args=-t2'],
-             ['name=./rdm_one_sided', 'nnodes=2', 'args=-t4'],
-             ['name=./rdm_one_sided', 'nnodes=2', 'args=-t8'],
-             ['name=./rdm_one_sided', 'nnodes=2', 'args=-t16'],
-             ['name=./rdm_one_sided', 'nnodes=2', 'args=-t24'],
+testlist = [ ['name=./rdm_pingpong', 'nnodes=2', 'cpus_per_task=1', 'args=-t1'],
+             ['name=./rdm_pingpong', 'nnodes=2', 'cpus_per_task=2', 'args=-t2'],
+             ['name=./rdm_pingpong', 'nnodes=2', 'cpus_per_task=4', 'args=-t4'],
+             ['name=./rdm_pingpong', 'nnodes=2', 'cpus_per_task=8', 'args=-t8'],
+             ['name=./rdm_pingpong', 'nnodes=2', 'cpus_per_task=16', 'args=-t16'],
+             ['name=./rdm_pingpong', 'nnodes=2', 'cpus_per_task=24', 'args=-t24'],
+             ['name=./rdm_one_sided', 'nnodes=2', 'cpus_per_task=1', 'args=-t1'],
+             ['name=./rdm_one_sided', 'nnodes=2', 'cpus_per_task=2', 'args=-t2'],
+             ['name=./rdm_one_sided', 'nnodes=2', 'cpus_per_task=4', 'args=-t4'],
+             ['name=./rdm_one_sided', 'nnodes=2', 'cpus_per_task=8', 'args=-t8'],
+             ['name=./rdm_one_sided', 'nnodes=2', 'cpus_per_task=16', 'args=-t16'],
+             ['name=./rdm_one_sided', 'nnodes=2', 'cpus_per_task=24', 'args=-t24'],
              ['name=./rdm_mbw_mr', 'nnodes=2', 'ntasks=2', 'cpu_bind=none', 'timeout=600'],
              ['name=./random_access', 'nnodes=2', 'ntasks=2', 'cpu_bind=none']
              ]
 
 class craytests:
     def __init__(self, _name, _args, _provider, _timeout,
-                 _nnodes, _ntasks, _nthreads, _launcher=None,
+                 _nnodes, _ntasks, _cpus_per_task, _nthreads, _launcher=None,
                  _nodelist=None, _cpu_bind=None):
         self.name = _name
         self.args = _args
         self.provider = _provider
         self.nnodes = _nnodes
         self.ntasks = _ntasks
+        self.cpus_per_task = _cpus_per_task
         self.nthreads = _nthreads
         self.timeout = _timeout
         self.launcher = _launcher
@@ -87,6 +88,7 @@ class craytests:
             s += '\tprovider: default\n'
         s += '\tnnodes: '+self.nnodes+'\n'
         s += '\tntask: '+self.ntasks+'\n'
+        s += '\tncpus_per_tasks: '+self.cpus_per_task+'\n'
         s += '\tnthreads: '+self.nthreads+'\n'
         s += '\ttimeout: '+str(self.timeout)+'\n'
         if self.launcher != None:
@@ -109,7 +111,8 @@ class craytests:
             cmd += ['srun', '--nodes='+self.nnodes,
                     '--exclusive',
                     '-t'+self.formattedTimeout(),
-                    '--ntasks-per-node='+self.ntasks ]
+                    '--ntasks-per-node='+self.ntasks,
+                    '--cpus-per-task='+self.cpus_per_task ]
             if self.nthreads != None:
                 cmd += [ '--cpus-per-task='+self.nthreads ]
             if self.nodelist != None:
@@ -119,7 +122,8 @@ class craytests:
         elif self.launcher == 'aprun':
             cmd += ['aprun', '-n'+self.nnodes,
                     '-t'+str(self.timeout),
-                    '-N'+self.ntasks ]
+                    '-N'+self.ntasks,
+                    '-d'+self.cpus_per_task ]
             if self.nthreads != None:
                 cmd += [ '-d'+self.nthreads ]
             if self.nodelist != None:
@@ -255,6 +259,7 @@ def _main():
         targs = None
         tnnodes = '1'
         tntasks = '1'
+        tcpus_per_task = '1'
         tnthreads = None
         ttimeout = timeout
         tnodelist = nodelist
@@ -270,6 +275,8 @@ def _main():
                 tnnodes = val
             elif param == 'ntasks':
                 tntasks = val
+            elif param == 'cpus_per_task':
+                tcpus_per_task = val
             elif param == 'nthreads':
                 tnthreads = val
             elif param == 'timeout':
@@ -286,7 +293,7 @@ def _main():
             sys.stdout.write('Skipping unnamed test configuration\n')
             continue
 
-        ct = craytests(tname, targs, tprovider, ttimeout, tnnodes, tntasks, tnthreads, launcher, tnodelist, tcpu_bind)
+        ct = craytests(tname, targs, tprovider, ttimeout, tnnodes, tntasks, tcpus_per_task, tnthreads, launcher, tnodelist, tcpu_bind)
         if ct == None:
             sys.stdout.write('Failed to create test \'%s\'\n'%(t[0]))
             return -1
