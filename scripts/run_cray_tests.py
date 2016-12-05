@@ -295,7 +295,7 @@ def _main():
 
         ct = craytests(tname, targs, tprovider, ttimeout, tnnodes, tntasks, tcpus_per_task, tnthreads, launcher, tnodelist, tcpu_bind)
         if ct == None:
-            sys.stdout.write('Failed to create test \'%s\'\n'%(t[0]))
+            sys.stdout.write('Failed to create test \'%s\'\n'%(tname))
             return -1
         ctlist.append(ct)
 
@@ -305,7 +305,7 @@ def _main():
     job_num = 0
     for (i, ct) in enumerate(ctlist):
         if ct.start() != 0:
-            sys.stdout.write('Skipping %s\n'%(t[0]))
+            sys.stdout.write('Skipping %s\n'%(ct.name))
             continue
         plist.append(ct)
         job_num += 1
