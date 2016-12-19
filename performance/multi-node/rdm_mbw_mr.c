@@ -758,8 +758,8 @@ int main(int argc, char *argv[])
 								FIELD_WIDTH, c + 1, FLOAT_PRECISION, bw);
 							fflush(stdout);
 						}
+						fprintf(stdout, c == IOV_CNT - 1 ? "\n" : "");
 					}
-					fprintf(stdout, c == IOV_CNT - 1 ? "\n" : "");
 				}
 			}
 		}
