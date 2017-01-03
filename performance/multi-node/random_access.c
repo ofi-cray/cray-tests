@@ -889,6 +889,15 @@ static int random_access(void)
 	}
 	/* End verification phase */
 
+	rc = fi_close(&prov.data.l_lock_mr->fid);
+	assert(rc == FI_SUCCESS);
+	
+	rc = fi_close(&prov.data.l_table_mr->fid);
+	assert(rc == FI_SUCCESS);
+
+	rc = fi_close(&prov.data.l_scratch_mr->fid);
+	assert(rc == FI_SUCCESS);
+
 	free(hpcc_table);
 	free(hpcc_lock);
 	failed_table:
