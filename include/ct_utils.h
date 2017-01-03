@@ -196,8 +196,39 @@ static inline double ct_wall_clock_time()
 	return ct_cpu_time() / CLOCKS_PER_SEC;
 }
 
-/* out-of-band process management stuff */
+/*
+ * The use of this macro creates a static function in the file where it is
+ *   used with a function name that is related to the label parameter. 
+ *   The name generated for the function is 'ct_allreduce_<LABEL>'. 
+ *
+ *   Ex. CT_ALLREDUCE_FUNC(int_sum, int, +) -> ct_allreduce_int_sum
+ */
 
+#define CT_ALLREDUCE_FUNC(LABEL, type, op) \
+	static type ct_allreduce_##LABEL (void *src, int total_ranks) \
+	{ \
+		type *vals; \
+		int i; \
+		type ret; \
+		\
+		vals = calloc(total_ranks, sizeof(type)); \
+		assert(vals); \
+		\
+		ctpm_Allgather(src, sizeof(type), vals); \
+		\
+		ret = vals[0]; \
+		for (i = 1; i < total_ranks; i++) \
+		ret = ret op vals[i]; \
+		\
+		ctpm_Barrier(); \
+		\
+		free(vals); \
+		\
+		return ret; \
+	}
+
+
+/* out-of-band process management stuff */
 void ctpm_Init(int *, char ***);
 void ctpm_Abort(void);
 void ctpm_Exit(void);
