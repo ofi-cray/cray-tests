@@ -191,31 +191,6 @@
 #define HEAD_RANK (rank == 0)
 #define UNLOCKED 0
 #define LOCKED(rank) (rank + 1)
-
-#define CTPM_SIMPLE_TYPE_FUNC(LABEL, type, op) \
-		static type ctpm_##LABEL (void *src, int total_ranks) \
-		 \
-		{ \
-			type *vals; \
-			int i; \
-			type ret; \
-			\
-			vals = calloc(total_ranks, sizeof(type)); \
-			assert(vals); \
-			\
-			ctpm_Allgather(src, sizeof(type), vals); \
-			\
-			ret = vals[0]; \
-			for (i = 1; i < total_ranks; i++) \
-				ret = ret op vals[i]; \
-			\
-			ctpm_Barrier(); \
-			\
-			free(vals); \
-			\
-			return ret; \
-		}
-
 #define SCRATCH_SIZE 8
 
 /* global variables */
@@ -348,8 +323,8 @@ static inline void exchange_registration_data(fabric_t *fabric)
 }
 
 /* function declarations */
-CTPM_SIMPLE_TYPE_FUNC(int_sum_all, int, +);
-CTPM_SIMPLE_TYPE_FUNC(int64_sum_all, int64_t, +);
+CT_ALLREDUCE_FUNC(int_sum, int, +);
+CT_ALLREDUCE_FUNC(int64_sum, int64_t, +);
 
 static inline void cq_readerr(struct fid_cq *cq, const char *cq_str)
 {
@@ -772,7 +747,7 @@ static int random_access(void)
 		send_abort = 1;
 
 	ctpm_Barrier();
-	recv_abort = ctpm_int_sum_all(&send_abort, num_ranks);
+	recv_abort = ct_allreduce_int_sum(&send_abort, num_ranks);
 	ctpm_Barrier();
 
 	if (recv_abort > 0) {
@@ -872,7 +847,7 @@ static int random_access(void)
 	real_time += usec_time();
 
 	ctpm_Barrier();
-	global_num_errors = ctpm_int64_sum_all((void *)&num_errors, num_ranks);
+	global_num_errors = ct_allreduce_int64_sum((void *)&num_errors, num_ranks);
 	ctpm_Barrier();
 
 	/* End timed section */
