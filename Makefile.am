@@ -6,7 +6,8 @@ bin_PROGRAMS = \
 	performance/multi-node/rdm_pingpong \
 	performance/multi-node/rdm_one_sided \
 	performance/multi-node/random_access \
-	performance/single-node/lock_tests
+	performance/single-node/lock_tests \
+	performance/single-node/builtin_atomic_tests
 
 dist_bin_SCRIPTS = \
 	scripts/run_cray_tests.py
@@ -41,6 +42,10 @@ performance_multi_node_random_access_LDADD = libcraytests.la
 performance_single_node_lock_tests_SOURCES = \
 	performance/single-node/lock_tests.c
 performance_single_node_lock_tests_LDADD = libcraytests.la
+
+performance_single_node_builtin_atomic_tests_SOURCES = \
+	performance/single-node/builtin_atomic_tests.c
+performance_single_node_builtin_atomic_tests_LDADD = libcraytests.la
 
 EXTRA_DIST = \
 	ct_utils.h \
