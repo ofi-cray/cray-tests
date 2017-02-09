@@ -34,7 +34,6 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <stdio.h>
-#include <time.h>
 
 #include "ct_print_utils.h"
 #include "ct_utils.h"
@@ -48,70 +47,6 @@ do {				\
 	fflush(stdout);		\
 } while (0)
 #endif
-
-/*******************************************************************************
- * Begin C11 atomic types
- ******************************************************************************/
-/*
-typedef _Atomic _Bool atomic_bool;
-typedef _Atomic char atomic_char;
-typedef _Atomic signed char atomic_schar;
-typedef _Atomic unsigned char atomic_uchar;
-typedef _Atomic short atomic_short;
-typedef _Atomic unsigned short atomic_ushort;
-typedef _Atomic int atomic_int; - Yay
-typedef _Atomic unsigned int atomic_uint;
-typedef _Atomic long atomic_long;
-typedef _Atomic unsigned long atomic_ulong;
-typedef _Atomic long long atomic_llong;
-typedef _Atomic unsigned long long atomic_ullong;
-typedef _Atomic __CHAR16_TYPE__ atomic_char16_t;
-typedef _Atomic __CHAR32_TYPE__ atomic_char32_t;
-typedef _Atomic __WCHAR_TYPE__ atomic_wchar_t;
-typedef _Atomic __INT_LEAST8_TYPE__ atomic_int_least8_t;
-typedef _Atomic __UINT_LEAST8_TYPE__ atomic_uint_least8_t;
-typedef _Atomic __INT_LEAST16_TYPE__ atomic_int_least16_t;
-typedef _Atomic __UINT_LEAST16_TYPE__ atomic_uint_least16_t;
-typedef _Atomic __INT_LEAST32_TYPE__ atomic_int_least32_t;
-typedef _Atomic __UINT_LEAST32_TYPE__ atomic_uint_least32_t;
-typedef _Atomic __INT_LEAST64_TYPE__ atomic_int_least64_t;
-typedef _Atomic __UINT_LEAST64_TYPE__ atomic_uint_least64_t;
-typedef _Atomic __INT_FAST8_TYPE__ atomic_int_fast8_t;
-typedef _Atomic __UINT_FAST8_TYPE__ atomic_uint_fast8_t;
-typedef _Atomic __INT_FAST16_TYPE__ atomic_int_fast16_t;
-typedef _Atomic __UINT_FAST16_TYPE__ atomic_uint_fast16_t;
-typedef _Atomic __INT_FAST32_TYPE__ atomic_int_fast32_t;
-typedef _Atomic __UINT_FAST32_TYPE__ atomic_uint_fast32_t;
-typedef _Atomic __INT_FAST64_TYPE__ atomic_int_fast64_t;
-typedef _Atomic __UINT_FAST64_TYPE__ atomic_uint_fast64_t;
-typedef _Atomic __INTPTR_TYPE__ atomic_intptr_t;
-typedef _Atomic __UINTPTR_TYPE__ atomic_uintptr_t;
-typedef _Atomic __SIZE_TYPE__ atomic_size_t;
-typedef _Atomic __PTRDIFF_TYPE__ atomic_ptrdiff_t;
-typedef _Atomic __INTMAX_TYPE__ atomic_intmax_t;
-typedef _Atomic __UINTMAX_TYPE__ atomic_uintmax_t;
-*/
-/*******************************************************************************
- * End C11 atomic types
- ******************************************************************************/
-
-/*******************************************************************************
- * Begin C11 atomic memory orders
- ******************************************************************************/
-/*
-  typedef enum
-  {
-    memory_order_relaxed = __ATOMIC_RELAXED,
-    memory_order_consume = __ATOMIC_CONSUME,
-    memory_order_acquire = __ATOMIC_ACQUIRE,
-    memory_order_release = __ATOMIC_RELEASE,
-    memory_order_acq_rel = __ATOMIC_ACQ_REL,
-    memory_order_seq_cst = __ATOMIC_SEQ_CST
-  } memory_order;
-*/
-/*******************************************************************************
- * End C11 atomic memory orders
- ******************************************************************************/
 
 /*******************************************************************************
  * Begin tunables
@@ -149,7 +84,7 @@ atomic_is_lock_free(&atomic_var);
 
 
 #define STORE_EXPLICIT \
-atomic_store_explicit(&atomic_var, ++val, memory_order_relaxed);
+atomic_store_explicit(&atomic_var, ++val, memory_order_seq_cst);
 
 #define STORE \
 atomic_store(&atomic_var, ++val);
@@ -230,7 +165,7 @@ atomic_flag_test_and_set_explicit(&atomic_var, MEMORY_ORDER);
 atomic_flag_clear(&atomic_var);
 
 #define FLAG_CLEAR_EXPLICIT \
-atomic_flag_clear_explicit(&atomic_var, memory_order_relaxed);
+atomic_flag_clear_explicit(&atomic_var, memory_order_seq_cst);
 /*******************************************************************************
  * End wrappers
  ******************************************************************************/
@@ -272,10 +207,10 @@ int main(int argc, char **argv)
 
 	info = ct_init_info(test_name, csv_path);
 
-	/* Attempt to prevent compiler from unrolling the loop */
-	srand((unsigned) time(NULL));
-	while (iters < (1 << 22)) {
-		iters = (uint64_t) rand();
+	if (argc != 2) {
+		iters = 1 << 22;
+	} else {
+		iters = atoi(argv[1]);
 	}
 
 	ct_add_line(info, "IterationsOfEachFunction:%lu\n", iters);
