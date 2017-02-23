@@ -492,6 +492,7 @@ int main(int argc, char *argv[])
 	struct per_iteration_data iter_key;
 	struct per_thread_data *ptd;
 	double min_lat, max_lat, sum_lat;
+	uint32_t addr_format = FI_ADDR_GNI;
 
 	pthread_mutex_init(&mutex, NULL);
 	tunables.threads = 1;
@@ -504,7 +505,7 @@ int main(int argc, char *argv[])
 	if (!hints)
 		return -1;
 
-	while ((op = getopt(argc, argv, "hl:ms:t:" CT_STD_OPTS)) != -1) {
+	while ((op = getopt(argc, argv, "hl:ms:t:f" CT_STD_OPTS)) != -1) {
 		switch (op) {
 		default:
 			ct_parse_std_opts(op, optarg, hints);
@@ -541,6 +542,9 @@ int main(int argc, char *argv[])
                                 return EXIT_FAILURE;
                         }
                         break;
+		case 'f':
+			addr_format = FI_ADDR_STR;
+			break;
 		case '?':
 		case 'h':
 			print_usage();
@@ -551,6 +555,7 @@ int main(int argc, char *argv[])
 	hints->ep_attr->type	= FI_EP_RDM;
 	hints->caps		= FI_TAGGED | FI_DIRECTED_RECV;
 	hints->mode		= FI_CONTEXT | FI_LOCAL_MR;
+	hints->addr_format      = addr_format;
 
 	if (numprocs != 2) {
 		if (myid == 0) {

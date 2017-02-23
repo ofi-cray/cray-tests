@@ -115,6 +115,8 @@ void print_usage(void)
 				    "acknowldgement (64, 10) [cannot be used with -v]");
 		ct_print_opts_usage("-v", "Vary the window size (default no) "
 				    "[cannot be used with -w]");
+		ct_print_opts_usage("-f", "Use FI_ADDR_STR format (default "
+			"FI_ADDR_GNI");
 		ct_print_std_usage();
 	}
 }
@@ -521,6 +523,7 @@ int main(int argc, char *argv[])
 	int c, j;
 	int curr_size;
 	enum send_recv_type_e type;
+	uint32_t addr_format;
 
 	ctpm_Init(&argc, &argv);
 	ctpm_Rank(&myid);
@@ -531,12 +534,13 @@ int main(int argc, char *argv[])
 	window_size      = DEFAULT_WINDOW;
 	window_varied    = 0;
 	print_rate       = 1;
+	addr_format      = FI_ADDR_GNI;
 
 	hints = fi_allocinfo();
 	if (!hints)
 		return -1;
 
-	while ((op = getopt(argc, argv, "hp:w:vr:" CT_STD_OPTS)) != -1) {
+	while ((op = getopt(argc, argv, "hp:w:vr:f" CT_STD_OPTS)) != -1) {
 		switch (op) {
 		default:
 			ct_parse_std_opts(op, optarg, hints);
@@ -561,6 +565,9 @@ int main(int argc, char *argv[])
 				return EXIT_FAILURE;
 			}
 			break;
+		case 'f':
+			addr_format = FI_ADDR_STR;
+			break;
 		case '?':
 		case 'h':
 			print_usage();
@@ -571,6 +578,7 @@ int main(int argc, char *argv[])
 	hints->ep_attr->type	= FI_EP_RDM;
 	hints->caps		= FI_MSG | FI_DIRECTED_RECV;
 	hints->mode		= FI_CONTEXT | FI_LOCAL_MR;
+	hints->addr_format      = addr_format;
 
 	if (numprocs < 2) {
 		if (!myid) {

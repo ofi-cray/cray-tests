@@ -544,6 +544,7 @@ int main(int argc, char *argv[])
 	uint64_t time_start, time_end;
 	uint64_t bytes_sent;
 	double mbps;
+	uint32_t addr_format = FI_ADDR_GNI;
 
 	pthread_mutex_init(&mutex, NULL);
 	tunables.threads = 1;
@@ -558,7 +559,7 @@ int main(int argc, char *argv[])
 		return -1;
 	}
 
-	while ((op = getopt(argc, argv, "hmt:i:l:s:" CT_STD_OPTS)) != -1) {
+	while ((op = getopt(argc, argv, "hmt:i:l:s:f" CT_STD_OPTS)) != -1) {
 		switch (op) {
 		default:
 			ct_parse_std_opts(op, optarg, hints);
@@ -603,6 +604,9 @@ int main(int argc, char *argv[])
 			}
 			window_size_large = window_size;
 			break;
+		case 'f':
+			addr_format = FI_ADDR_STR;
+			break;
 		case '?':
 		case 'h':
 			print_usage();
@@ -612,10 +616,11 @@ int main(int argc, char *argv[])
 
 	pthread_barrier_init(&thread_barrier, NULL, tunables.threads);
 
-	hints->ep_attr->type	= FI_EP_RDM;
-	hints->caps		= FI_MSG | FI_DIRECTED_RECV | FI_RMA;
-	hints->mode		= FI_CONTEXT | FI_LOCAL_MR;
+	hints->ep_attr->type	    = FI_EP_RDM;
+	hints->caps		    = FI_MSG | FI_DIRECTED_RECV | FI_RMA;
+	hints->mode		    = FI_CONTEXT | FI_LOCAL_MR;
 	hints->domain_attr->mr_mode = FI_MR_BASIC;
+	hints->addr_format          = addr_format;
 
 	if (numprocs != 2) {
 		if (myid == 0) {
