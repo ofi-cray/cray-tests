@@ -33,6 +33,8 @@
 #ifndef CT_UTILS_H
 #define CT_UTILS_H
 
+#include <pthread.h>
+
 static clock_t start, end;
 static pthread_mutex_t clock_lock;
 static char clock_started, is_clock_lock_init;
