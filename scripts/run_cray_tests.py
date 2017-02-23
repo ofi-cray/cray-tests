@@ -61,8 +61,8 @@ testlist = [ ['name=./rdm_pingpong', 'nnodes=2', 'cpus_per_task=1', 'args=-t1'],
 
 class craytests:
     def __init__(self, _name, _args, _provider, _timeout,
-                 _nnodes, _ntasks, _cpus_per_task, _nthreads, _launcher=None,
-                 _nodelist=None, _cpu_bind=None):
+                 _nnodes, _ntasks, _cpus_per_task, _nthreads, _addr_format,
+		 _launcher=None, _nodelist=None, _cpu_bind=None):
         self.name = _name
         self.args = _args
         self.provider = _provider
@@ -74,6 +74,7 @@ class craytests:
         self.launcher = _launcher
         self.nodelist = _nodelist
         self.cpu_bind = _cpu_bind
+        self.addr_format = _addr_format
 
     def __str__(self):
         s = 'craytests object:\n'
@@ -135,6 +136,10 @@ class craytests:
             cmd += self.args.split()
 
         self.cmd = ' '.join(cmd)
+
+        if self.addr_format == 'FI_ADDR_STR':
+            self.cmd += ' -f'
+
         sys.stdout.write(('Starting: %s\n')%(self.cmd))
 
         try:
@@ -151,7 +156,7 @@ class craytests:
             return ('%02d:%02d:%02d')%(self.timeout/3600, (self.timeout%3600)/60, self.timeout%60)
         else:
             return str(self.timeout)
-            
+
     #
     # Newer versions of python subprocess support a time out for
     # wait() and functions that call wait(), e.g. communicate().  For
@@ -243,6 +248,8 @@ def _main():
                         help='provider (e.g., gni)')
     parser.add_argument('-j', '--jobs', dest='jobs', action='store', type=int,
                         default=1, help='Number of jobs to run simultaneously')
+    parser.add_argument('-f', '--addr_format', dest='addr_format', action='store', default='FI_ADDR_GNI',
+			 help='Specify FI_ADDR_STR address format')
 
     args = parser.parse_args()
 
@@ -252,6 +259,7 @@ def _main():
     provider = args.provider
     max_jobs = args.jobs
     timeout = ct_default_timeout
+    addr_format = args.addr_format
 
     ctlist = list()
     for tparams in testlist:
@@ -293,7 +301,7 @@ def _main():
             sys.stdout.write('Skipping unnamed test configuration\n')
             continue
 
-        ct = craytests(tname, targs, tprovider, ttimeout, tnnodes, tntasks, tcpus_per_task, tnthreads, launcher, tnodelist, tcpu_bind)
+        ct = craytests(tname, targs, tprovider, ttimeout, tnnodes, tntasks, tcpus_per_task, tnthreads, addr_format, launcher, tnodelist, tcpu_bind)
         if ct == None:
             sys.stdout.write('Failed to create test \'%s\'\n'%(tname))
             return -1

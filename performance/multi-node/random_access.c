@@ -148,7 +148,7 @@
 	} while (0)
 #define VERBOSE(fmt, args...) PRINT(stdout,"rank %d: " fmt, rank, ##args)
 #define ERROR(fmt, args...) PRINT(stderr, fmt, ##args)
-#if 1 
+#if 1
 # define DEBUG(fmt, args...) ;
 #else
 # define DEBUG(fmt, args...) \
@@ -866,7 +866,7 @@ static int random_access(void)
 
 	rc = fi_close(&prov.data.l_lock_mr->fid);
 	assert(rc == FI_SUCCESS);
-	
+
 	rc = fi_close(&prov.data.l_table_mr->fid);
 	assert(rc == FI_SUCCESS);
 
@@ -983,6 +983,7 @@ int main(int argc, char **argv)
 	int size;
 	int op, ret;
 	struct fi_info *hints;
+	uint32_t addr_format = FI_ADDR_GNI;
 
 	ctpm_Init(&argc, &argv);
 	ctpm_Rank(&rank);
@@ -994,7 +995,7 @@ int main(int argc, char **argv)
 
 	hints = prov.hints;
 
-	while ((op = getopt(argc, argv, "hm:n:" CT_STD_OPTS)) != -1) {
+	while ((op = getopt(argc, argv, "hm:n:f" CT_STD_OPTS)) != -1) {
 		switch(op) {
 		default:
 			ct_parse_std_opts(op, optarg, hints);
@@ -1020,6 +1021,9 @@ int main(int argc, char **argv)
 				return -1;
 			}
 			break;
+		case 'f':
+			addr_format = FI_ADDR_STR;
+			break;
 		case '?':
 		case 'h':
 			print_usage();
@@ -1032,6 +1036,7 @@ int main(int argc, char **argv)
 	hints->caps = FI_TAGGED | FI_DIRECTED_RECV;
 	hints->mode = FI_CONTEXT | FI_LOCAL_MR;
 	hints->caps |= GNIX_EP_RDM_PRIMARY_CAPS;
+	hints->addr_format = addr_format;
 
 	if (!thread_safe) {
 		hints->domain_attr->threading = FI_THREAD_COMPLETION;
