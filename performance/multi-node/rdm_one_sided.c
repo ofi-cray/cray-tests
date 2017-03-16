@@ -143,6 +143,7 @@ void print_usage(void)
 		ct_print_opts_usage("-l <loops>", "number of loops to measure");
 		ct_print_opts_usage("-s <skip>", "number of loops to skip");
 		ct_print_opts_usage("-i <iterations>", "iterations per loop");
+		ct_print_opts_usage("-j", "use fi_inject_write");
 		ct_print_std_usage();
 	}
 }
@@ -623,6 +624,7 @@ int main(int argc, char *argv[])
 	uint64_t time_start, time_end;
 	uint64_t bytes_sent;
 	double mbps;
+	int use_fi_inject_write = 0;
 
 	pthread_mutex_init(&mutex, NULL);
 	tunables.threads = 1;
@@ -637,7 +639,7 @@ int main(int argc, char *argv[])
 		return -1;
 	}
 
-	while ((op = getopt(argc, argv, "hmt:i:l:s:" CT_STD_OPTS)) != -1) {
+	while ((op = getopt(argc, argv, "hmt:i:l:s:j" CT_STD_OPTS)) != -1) {
 		switch (op) {
 		default:
 			ct_parse_std_opts(op, optarg, hints);
@@ -681,6 +683,9 @@ int main(int argc, char *argv[])
 				return EXIT_FAILURE;
 			}
 			window_size_large = window_size;
+			break;
+		case 'j':
+			use_fi_inject_write = ~0;
 			break;
 		case '?':
 		case 'h':
@@ -761,9 +766,19 @@ int main(int argc, char *argv[])
 		/* threaded section */
 		for (i = 0; i < tunables.threads; i++) {
 			iter_key.thread_id = i;
-			ret = pthread_create(&thread_data[i].thread, NULL,
-					size <= fi->tx_attr->inject_size ?
-			thread_fn_inject : thread_fn, iter_key.data);
+			if (use_fi_inject_write) {
+				ret = pthread_create(&thread_data[i].thread,
+						     NULL,
+						     size <=
+						     fi->tx_attr->inject_size ?
+						     thread_fn_inject : thread_fn,
+						     iter_key.data);
+			} else {
+				ret = pthread_create(&thread_data[i].thread,
+						     NULL, thread_fn,
+						     iter_key.data);
+			}
+
 			if (ret != 0) {
 				printf("couldn't create thread %i\n", i);
 				pthread_exit(NULL); /* a more robust exit would be nice here */
