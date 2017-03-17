@@ -143,7 +143,7 @@ void print_usage(void)
 		ct_print_opts_usage("-l <loops>", "number of loops to measure");
 		ct_print_opts_usage("-s <skip>", "number of loops to skip");
 		ct_print_opts_usage("-i <iterations>", "iterations per loop");
-		ct_print_opts_usage("-j", "use fi_inject_write");
+		ct_print_opts_usage("-n", "use fi_inject_write");
 		ct_print_std_usage();
 	}
 }
@@ -639,7 +639,7 @@ int main(int argc, char *argv[])
 		return -1;
 	}
 
-	while ((op = getopt(argc, argv, "hmt:i:l:s:j" CT_STD_OPTS)) != -1) {
+	while ((op = getopt(argc, argv, "hmt:i:l:s:n" CT_STD_OPTS)) != -1) {
 		switch (op) {
 		default:
 			ct_parse_std_opts(op, optarg, hints);
@@ -684,7 +684,7 @@ int main(int argc, char *argv[])
 			}
 			window_size_large = window_size;
 			break;
-		case 'j':
+		case 'n':
 			use_fi_inject_write = ~0;
 			break;
 		case '?':
