@@ -25,6 +25,20 @@ AM_PROG_CC_C_O
 
 LT_INIT
 
+if pkg-config --exists cray-drc; then
+	DRC_CFLAGS=`pkg-config cray-drc --cflags`
+	DRC_LIBS=`pkg-config cray-drc --libs`
+	CPPFLAGS="$DRC_CFLAGS $CPPFLAGS"
+	LDFLAGS="$DRC_LIBS $LDFLAGS"
+	HAVE_DRC=1
+	AC_DEFINE([HAVE_DRC], [1], ["Does the project have access to DRC?"])
+else
+	HAVE_DRC=0
+	AC_DEFINE([HAVE_DRC], [0], ["Does the project have access to DRC?"])
+fi
+
+AC_SUBST([HAVE_DRC])
+
 AC_ARG_WITH([libfabric],
             AC_HELP_STRING([--with-libfabric], [Use non-default libfabric location - default NO]),
             [AS_IF([test -d $withval/lib64], [fab_libdir="lib64"], [fab_libdir="lib"])
