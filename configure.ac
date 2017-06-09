@@ -25,6 +25,17 @@ AM_PROG_CC_C_O
 
 LT_INIT
 
+FI_PKG_CHECK_MODULES([DRC], [cray-drc],
+		     [CPPFLAGS="$DRC_CFLAGS $CPPFLAGS"
+		      LDFLAGS="$DRC_LIBS $LDFLAGS"
+		      drc_happy=1],
+		     [drc_happy=0])
+
+AC_DEFINE([HAVE_DRC], [$drc_happy], ["Does the project have access to DRC?"])
+AM_CONDITIONAL([HAVE_DRC], [test $drc_happy -eq 1])
+
+AC_SUBST([HAVE_DRC])
+
 AC_ARG_WITH([libfabric],
             AC_HELP_STRING([--with-libfabric], [Use non-default libfabric location - default NO]),
             [AS_IF([test -d $withval/lib64], [fab_libdir="lib64"], [fab_libdir="lib"])

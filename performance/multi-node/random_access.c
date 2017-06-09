@@ -148,7 +148,7 @@
 	} while (0)
 #define VERBOSE(fmt, args...) PRINT(stdout,"rank %d: " fmt, rank, ##args)
 #define ERROR(fmt, args...) PRINT(stderr, fmt, ##args)
-#if 1 
+#if 1
 # define DEBUG(fmt, args...) ;
 #else
 # define DEBUG(fmt, args...) \
@@ -866,7 +866,7 @@ static int random_access(void)
 
 	rc = fi_close(&prov.data.l_lock_mr->fid);
 	assert(rc == FI_SUCCESS);
-	
+
 	rc = fi_close(&prov.data.l_table_mr->fid);
 	assert(rc == FI_SUCCESS);
 

@@ -9,6 +9,10 @@ bin_PROGRAMS = \
 	performance/single-node/lock_tests \
 	performance/single-node/builtin_atomic_tests
 
+if HAVE_DRC
+bin_PROGRAMS += performance/multi-node/auth_key_test
+endif
+
 dist_bin_SCRIPTS = \
 	scripts/run_cray_tests.py
 
@@ -35,6 +39,12 @@ performance_multi_node_rdm_one_sided_LDADD = libcraytests.la
 performance_multi_node_random_access_SOURCES = \
         performance/multi-node/random_access.c
 performance_multi_node_random_access_LDADD = libcraytests.la
+
+if HAVE_DRC
+performance_multi_node_auth_key_test_SOURCES = \
+        performance/multi-node/auth_key_test.c
+performance_multi_node_auth_key_test_LDADD = libcraytests.la
+endif
 
 ################################################################################
 # Single-node sources
