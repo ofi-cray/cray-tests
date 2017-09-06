@@ -87,6 +87,7 @@ typedef struct buf_desc {
 struct per_thread_data {
 	pthread_t thread;
 	int tid; /* thread id */
+	uint32_t message_size;
 	struct fid_ep *ep;
 	struct fid_av *av;
 	struct fid_cq *rcq, *scq;
@@ -107,17 +108,6 @@ struct per_thread_data {
 	uint64_t time_end;
 	fabtests_tbar_t tbar;
 };
-
-struct per_iteration_data {
-	union {
-		struct {
-			uint32_t thread_id;
-			uint32_t message_size;
-		};
-		void *data;
-	};
-};
-
 
 static pthread_barrier_t thread_barrier;
 struct per_thread_data *thread_data;
@@ -459,20 +449,26 @@ void *thread_fn(void *data)
 	int i, j, peer;
 	int size;
 	ssize_t __attribute__((unused)) fi_rc;
-	struct per_thread_data *ptd;
-	struct per_iteration_data it;
+	struct per_thread_data *ptd = data;
 	uint64_t t_start = 0, t_end = 0;
 
-	it.data = data;
-	size = it.message_size;
+	size = ptd->message_size;
 
-	if (it.thread_id >= tunables.threads)
+	if (ptd->tid >= tunables.threads)
 		return (void *)-EINVAL;
 
-	ptd = &thread_data[it.thread_id];
 	ptd->bytes_sent = 0;
 
         ct_tbarrier(&ptd->tbar);
+
+	#ifdef TEST_STR_ENABLED
+	char profileName[256];
+
+	sprintf(profileName, "rdm_one_sided-%s-pid%d-tid%d-%d.prof",
+	getenv("HOSTNAME"), myid, ptd->tid, ptd->message_size);
+	fprintf(stdout, "%s\n", profileName);
+	fflush(stdout);
+	#endif // TEST_STR_ENABLED
 
 	if (myid == 0) {
 		peer = 1;
@@ -538,7 +534,6 @@ int main(int argc, char *argv[])
 {
 	int op, ret;
 	int i, j, size;
-	struct per_iteration_data iter_key;
 	struct per_thread_data *ptd;
 	double min_lat, max_lat, sum_lat;
 	uint64_t time_start, time_end;
@@ -646,6 +641,7 @@ int main(int argc, char *argv[])
 				 tbar_counter, tbar_signal);
 	}
 
+	#ifndef TEST_STR_ENABLED
 	if (myid == 0) {
 		fprintf(stdout, HEADER);
 		fprintf(stdout, "%-*s%*s%*s%*s%*s\n", 10, "# Size",
@@ -655,6 +651,7 @@ int main(int argc, char *argv[])
 			FIELD_WIDTH, "Max Lat (us)");
 		fflush(stdout);
 	}
+	#endif // TEST_STR_ENABLED
 
 	/* Bandwidth test */
 	for (size = 1; size <= MAX_MSG_SIZE; size *= 2) {
@@ -675,15 +672,15 @@ int main(int argc, char *argv[])
 			}
 		}
 
-		iter_key.message_size = size;
-
 		ctpm_Barrier();
 
 		/* threaded section */
 		for (i = 0; i < tunables.threads; i++) {
-			iter_key.thread_id = i;
+			thread_data[i].message_size = size;
+			thread_data[i].tid = i;
 			ret = pthread_create(&thread_data[i].thread, NULL,
-					thread_fn, iter_key.data);
+					     thread_fn, &thread_data[i]);
+
 			if (ret != 0) {
 				printf("couldn't create thread %i\n", i);
 				pthread_exit(NULL); /* a more robust exit would be nice here */
@@ -720,6 +717,7 @@ int main(int argc, char *argv[])
 
 			mbps = ((bytes_sent * 1.0) / (1024. * 1024.)) / ((time_end - time_start) / (1.0 * 1e6));
 
+			#ifndef TEST_STR_ENABLED
 			fprintf(stdout, "%-*d%*.*f%*.*f%*.*f%*.*f\n", 10, size,
 				FIELD_WIDTH, FLOAT_PRECISION, mbps,
 				FIELD_WIDTH, FLOAT_PRECISION,
@@ -727,6 +725,7 @@ int main(int argc, char *argv[])
 				FIELD_WIDTH, FLOAT_PRECISION, min_lat,
 				FIELD_WIDTH, FLOAT_PRECISION, max_lat);
 			fflush(stdout);
+			#endif // TEST_STR_ENABLED
 		}
 
 	}
