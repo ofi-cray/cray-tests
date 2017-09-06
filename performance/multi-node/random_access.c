@@ -140,6 +140,13 @@
 #include <rdma/fi_atomic.h>
 
 #include "ct_utils.h"
+#include "config.h"
+
+#include "rdma/fi_ext_gni.h"
+
+#if HAVE_DRC
+#include "rdmacred.h"
+#endif
 
 #define PRINT(stream, fmt, args...) \
 	do { \
@@ -245,10 +252,15 @@ fabric_t prov;
 
 int rank, num_ranks;
 uint64_t saved_initial_ran_val;
+#if HAVE_DRC
+static struct fi_gni_auth_key auth_key;
+static uint32_t drc_id;
+#endif
 
 struct test_tunables {
 	uint64_t total_mem_opt;
 	int num_updates_opt;
+	int use_auth_keys;
 };
 
 static struct test_tunables tunables = {0};
@@ -258,6 +270,39 @@ static double usec_time(void)
 	struct timeval tp;
 	gettimeofday(&tp, NULL);
 	return tp.tv_sec + tp.tv_usec / (double)1.0e6;
+}
+
+static inline void setup_authorization_key(void)
+{
+#if HAVE_DRC
+	int ret;
+	drc_info_handle_t info;
+	uint32_t cookie;
+
+	if (rank == 0) {
+		ret = drc_acquire(&drc_id, 0);
+		assert(ret == DRC_SUCCESS);
+	}
+
+	ctpm_Bcast(&drc_id, sizeof(uint32_t));
+
+	ret = drc_access(drc_id, 0, &info);
+	assert(ret == DRC_SUCCESS);
+
+	cookie = drc_get_first_cookie(info);
+	
+	auth_key.type = GNIX_AKT_RAW;
+	auth_key.raw.protection_key = cookie;
+
+	free(info);
+#endif
+}	
+
+static inline void teardown_authorization_key(void)
+{
+#if HAVE_DRC
+	drc_release(drc_id, 0);
+#endif
 }
 
 static inline void exchange_registration_data(fabric_t *fabric)
@@ -496,7 +541,7 @@ static inline int init_fabric(fabric_t *fabric)
 	uint64_t flags = 0;
 
 	/* Get fabric info */
-	ret = fi_getinfo(CT_FIVERSION, NULL, NULL, flags, fabric->hints,
+	ret = fi_getinfo(FI_VERSION(1, 5), NULL, NULL, flags, fabric->hints,
 			&fabric->info);
 	if (unlikely(ret)) {
 		ct_print_fi_error("fi_getinfo", ret);
@@ -509,6 +554,13 @@ static inline int init_fabric(fabric_t *fabric)
 		ct_print_fi_error("fi_fabric", ret);
 		goto err_fabric_open;
 	}
+
+#if HAVE_DRC
+	if (tunables.use_auth_keys) {
+		fabric->info->domain_attr->auth_key = (void *) &auth_key;
+		fabric->info->domain_attr->auth_key_size = sizeof(auth_key);
+	}
+#endif
 
 	/* Open domain */
 	ret = fi_domain(fabric->fab, fabric->info, &fabric->dom, NULL);
@@ -994,7 +1046,7 @@ int main(int argc, char **argv)
 
 	hints = prov.hints;
 
-	while ((op = getopt(argc, argv, "hm:n:" CT_STD_OPTS)) != -1) {
+	while ((op = getopt(argc, argv, "ahm:n:" CT_STD_OPTS)) != -1) {
 		switch(op) {
 		default:
 			ct_parse_std_opts(op, optarg, hints);
@@ -1020,6 +1072,12 @@ int main(int argc, char **argv)
 				return -1;
 			}
 			break;
+		case 'a':
+#if HAVE_DRC
+			DEBUG(stderr, "using authorization keys\n");
+			tunables.use_auth_keys = 1;
+#endif
+			break;
 		case '?':
 		case 'h':
 			print_usage();
@@ -1027,7 +1085,12 @@ int main(int argc, char **argv)
 		}
 	}
 
+	if (tunables.use_auth_keys) {
+		setup_authorization_key();
+	}
+
 	// modify hints as needed prior to fabric initialization
+	hints->domain_attr->mr_mode = FI_MR_BASIC;
 	hints->ep_attr->type = FI_EP_RDM;
 	hints->caps = FI_TAGGED | FI_DIRECTED_RECV;
 	hints->mode = FI_CONTEXT | FI_LOCAL_MR;
@@ -1049,6 +1112,10 @@ int main(int argc, char **argv)
 
 	// close the gnix provider fabric
 	fini_gnix_prov(&prov);
+
+	if (tunables.use_auth_keys) {
+		teardown_authorization_key();
+	}
 
 	// barrier and finalize
 	ctpm_Barrier();
