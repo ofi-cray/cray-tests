@@ -28,10 +28,11 @@ LT_INIT
 FI_PKG_CHECK_MODULES([DRC], [cray-drc],
 		     [CPPFLAGS="$DRC_CFLAGS $CPPFLAGS"
 		      LDFLAGS="$DRC_LIBS $LDFLAGS"
+                      AC_DEFINE_UNQUOTED([HAVE_DRC],[1],[Define to 1 if DRC available])
 		      drc_happy=1],
-		     [drc_happy=0])
+		     [AC_DEFINE_UNQUOTED([HAVE_DRC],[0],[Define to 1 if DRC available])
+                      drc_happy=0])
 
-AC_DEFINE([HAVE_DRC], [$drc_happy], ["Does the project have access to DRC?"])
 AM_CONDITIONAL([HAVE_DRC], [test $drc_happy -eq 1])
 
 AC_SUBST([HAVE_DRC])
