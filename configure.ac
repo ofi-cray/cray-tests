@@ -55,8 +55,8 @@ AC_ARG_WITH([pmi],
             [AM_CONDITIONAL([HAVE_PMI], [false])])
 
 AC_CHECK_LIB([pmi], [PMI_Allgather],
-	     AM_CONDITIONAL([HAVE_CRAY_PMI], [true]),
-	     AM_CONDITIONAL([HAVE_CRAY_PMI], [false]))
+	     [AC_DEFINE_UNQUOTED([HAVE_CRAY_PMI_COLL], [1], [define to 1 if Cray PMI collectives present])],
+	     [AC_DEFINE_UNQUOTED([HAVE_CRAY_PMI_COLL], [0], [define to 1 if Cray PMI collectives present])])
 
 AC_ARG_WITH([profiler],
             AC_HELP_STRING([--with-profiler], [Specify libprofiler location - default NO]),
@@ -84,7 +84,7 @@ AC_MSG_CHECKING([for fi_trywait support])
 AC_LINK_IFELSE([AC_LANG_PROGRAM([[#include <rdma/fi_eq.h>]],
 	       [[fi_trywait(NULL, NULL, 0);]])],
 	       [AC_MSG_RESULT([yes])],
-	       [AC_MSG_RESULT([no])
+		[AC_MSG_RESULT([no])
 	        AC_MSG_ERROR([cray-tests requires fi_trywait support. Cannot continue])])
 
 AC_CONFIG_FILES([Makefile])
