@@ -64,10 +64,6 @@ EXTRA_DIST = \
 
 if HAVE_PMI
 AM_CFLAGS += -lpmi
-
-if HAVE_CRAY_PMI
-AM_CFLAGS += -DCRAY_PMI_COLL
-endif
 endif
 
 if HAVE_PROFILE

@@ -54,8 +54,9 @@
 #include <rdma/fi_rma.h>
 #include "ct_utils.h"
 #include "pmi.h"
+#include "config.h"
 
-#ifndef CRAY_PMI_COLL
+#if !HAVE_CRAY_PMI_COLL
 
 static int myRank;
 static char *kvsName;
